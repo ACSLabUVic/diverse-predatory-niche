@@ -13,4 +13,4 @@ Mathieu's code
 ## Trait analyses (figure 4 and figure ED1)
 Rob's code
 
-These scripts have been run using R version 4.0.4 - Copyright (C) 2022 The R Foundation for Statistical Computing.
+These scripts have been run using R version 4.0.4 - Copyright (C) 2022 The R Foundation for Statistical Computing. See the renv folder to see the packages used within this project, all of which are available via CRAN.
