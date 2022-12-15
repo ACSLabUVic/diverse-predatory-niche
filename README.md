@@ -16,4 +16,4 @@ See `hum_pred.Rmd` chunks 12-18
 ## Trait analyses (Figure ED1)
 See `hum_pred.Rmd` chunk 19
 
-These scripts have been run using R version 4.0.4 - Copyright (C) 2022 The R Foundation for Statistical Computing. See the renv folder for the packages (and dependencies) used within this project.
+These scripts have been run using R version 4.0.4 - Copyright (C) 2022 The R Foundation for Statistical Computing.
