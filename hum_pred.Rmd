@@ -1372,40 +1372,48 @@ hyp_pred_prey <- function(s, df) {
 # hyp_pred <- lapply(unique(pred_prey_spp$predator_species)[1:20], hyp_pred_prey, df = pred_prey_spp)
 # 
 # saveRDS(hyp_pred, "data/processed/hyp_pred.rds")
+# 
+# hyp_pred <- readRDS("data/processed/hyp_pred.rds") # TOO LARGE FOR GitHub
+# 
+# hyp_names <- sapply(1:length(hyp_pred), function(i) hyp_pred[[i]][[1]])
+# hyp_vol <- sapply(1:length(hyp_pred), function(i) hyp_pred[[i]][[4]]@Volume)
+# 
+# hyp_perc_match <- lapply(1:length(hyp_pred), function(i) hyp_pred[[i]][[2]]) %>% 
+#   dplyr::bind_rows() %>% 
+#   dplyr::mutate(binomial = hyp_names) %>% 
+#   dplyr::mutate(perc = match_spp / prey_spp) %>% 
+#   # 80% threshold
+#   dplyr::filter(perc > 0.8)
+# 
+# hyp_vol_df <- data.frame(binomial = hyp_names, vol = hyp_vol, stringsAsFactors = FALSE) %>% 
+#   dplyr::filter(binomial %in% hyp_perc_match$binomial)
+# 
+# saveRDS(hyp_vol_df, "data/processed/hyp_vol_df.rds")
 
-hyp_pred <- readRDS("data/processed/hyp_pred.rds")
-
-hyp_names <- sapply(1:length(hyp_pred), function(i) hyp_pred[[i]][[1]])
-hyp_vol <- sapply(1:length(hyp_pred), function(i) hyp_pred[[i]][[4]]@Volume)
-
-hyp_perc_match <- lapply(1:length(hyp_pred), function(i) hyp_pred[[i]][[2]]) %>% 
-  dplyr::bind_rows() %>% 
-  dplyr::mutate(binomial = hyp_names) %>% 
-  dplyr::mutate(perc = match_spp / prey_spp) %>% 
-  # 80% threshold
-  dplyr::filter(perc > 0.8)
-
-hyp_vol_df <- data.frame(binomial = hyp_names, vol = hyp_vol, stringsAsFactors = FALSE) %>% 
-  dplyr::filter(binomial %in% hyp_perc_match$binomial)
+hyp_vol_df <- readRDS("data/processed/hyp_vol_df.rds")
 
 ## humans
 
 # hyp_hum <- lapply(hyp_vol_df$binomial, hyp_pred_prey, df = hum_spp)
 # 
 # saveRDS(hyp_hum, "data/processed/hyp_hum.rds")
+# 
+# hyp_hum <- readRDS("data/processed/hyp_hum.rds") # TOO LARGE FOR GitHub
+# 
+# hyp_hum_names <- sapply(1:length(hyp_hum), function(i) hyp_hum[[i]][[1]])
+# hyp_hum_vol <- sapply(1:length(hyp_hum), function(i) hyp_hum[[i]][[4]]@Volume)
+# 
+# hyp_hum_perc_match <- lapply(1:length(hyp_hum), function(i) hyp_hum[[i]][[2]]) %>% 
+#   dplyr::bind_rows() %>% 
+#   dplyr::mutate(binomial = hyp_hum_names) %>% 
+#   dplyr::mutate(perc = match_spp / prey_spp)
+# 
+# hyp_hum_vol_df <- data.frame(binomial = hyp_hum_names, vol = hyp_hum_vol, stringsAsFactors = FALSE) %>% 
+#   dplyr::filter(binomial %in% hyp_hum_perc_match$binomial)
+# 
+# saveRDS(hyp_hum_vol_df, "data/processed/hyp_hum_vol_df.rds")
 
-hyp_hum <- readRDS("data/processed/hyp_hum.rds")
-
-hyp_hum_names <- sapply(1:length(hyp_hum), function(i) hyp_hum[[i]][[1]])
-hyp_hum_vol <- sapply(1:length(hyp_hum), function(i) hyp_hum[[i]][[4]]@Volume)
-
-hyp_hum_perc_match <- lapply(1:length(hyp_hum), function(i) hyp_hum[[i]][[2]]) %>% 
-  dplyr::bind_rows() %>% 
-  dplyr::mutate(binomial = hyp_hum_names) %>% 
-  dplyr::mutate(perc = match_spp / prey_spp)
-
-hyp_hum_vol_df <- data.frame(binomial = hyp_hum_names, vol = hyp_hum_vol, stringsAsFactors = FALSE) %>% 
-  dplyr::filter(binomial %in% hyp_hum_perc_match$binomial)
+hyp_hum_vol_df <- readRDS("data/processed/hyp_hum_vol_df.rds")
 
 hyp_vol_comb <- dplyr::left_join(hyp_vol_df, hyp_hum_vol_df, by = "binomial") %>% 
   dplyr::mutate(vol_ratio = vol.y / vol.x)
