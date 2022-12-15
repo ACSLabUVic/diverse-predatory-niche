@@ -13,20 +13,18 @@ output: html_notebook
 # return outputs by default
 knitr::opts_chunk$set(echo = TRUE)
 
-# packages to install: renv, dplyr, readr, rphylopic, forcats, tidyr, cowplot (loads ggplot), jpeg
+# packages to install: renv, dplyr, readr, stringr, rphylopic, forcats, tidyr, cowplot (loads ggplot), jpeg, reshape2
+# packages for trait analysis: FD, ade4, missForest, hypervolume, gghalves, broom, effsize
 # see renv for packages and their dependencies
 
 library(dplyr) # load for pipe %>% 
 
-# library(stringr)
-# library(missForest)
-# library(hypervolume)
-# library(rphylopic)
-# library(jpeg)
-# library(grid)
-# library(tidytext)
-# library(cowplot)
-# library(effsize)
+library(ade4) # load for pcoa summary
+
+# # missForest doesn't install without randomForest package
+# # see here for help https://stackoverflow.com/questions/62541885/package-randomforest-is-not-available-for-r-version-4-0-2
+# urlPackage <- "https://cran.r-project.org/src/contrib/Archive/randomForest/randomForest_4.6-14.tar.gz"
+# install.packages(urlPackage, repos = NULL, type="source") 
 
 # save snapshot of packages to renv
 # renv::snapshot()
@@ -43,7 +41,7 @@ ggplot2::theme_set(cowplot::theme_cowplot())
 
 ```
 
-## Data
+## Load data
 
 Here we load in the data
 
@@ -60,7 +58,7 @@ cmp_orig <- readr::read_csv("data/raw/newstats_Fig1_nospp.csv")
 
 ```
 
-## Summary
+## Summary statistics
 
 Here we prepare the data and report some summary statistics
 
@@ -152,7 +150,7 @@ print(paste0("Percentage of vertebrate species used by humans, threatened by use
 
 ## Figure 1
 
-#### 1A and 1B
+### Figure 1 start
 
 Here we prepare the data for figure 1A and 1B
 
@@ -242,7 +240,7 @@ verts_threat_stack <- dplyr::left_join(verts_used, verts_thruse, by = "class_nam
 
 ```
 
-## stacked barplots
+### Stacked barplots
 
 Here we create the plots for figure 1A and 1B
 
@@ -311,7 +309,7 @@ stack_threat_plot <- ggplot2::ggplot(verts_threat_stack, ggplot2::aes(x = class_
 
 ```
 
-## Comparator analysis 
+### Comparator analysis 
 
 Here we produce figure 1C
 
@@ -414,7 +412,7 @@ dumb_log_plot <- ggplot2::ggplot(data = cmp_dumb, ggplot2::aes(x = div, y = comm
 
 ```
 
-## Figure 1 combined
+### Figure 1 combined
 
 Here we combine the panels, A, B, C into Figure 1
 
@@ -429,9 +427,13 @@ fig1_log <- cowplot::plot_grid(
 
 # cowplot::save_plot("figs/fig1_use_threat.png", fig1_log, base_height = 8, base_width = 14, dpi = 600)
 
+fig1_log
+
 ```
 
 ## Figure 2
+
+### Figure 2 start
 
 Here we prepare the data for figure 2
 
@@ -463,6 +465,7 @@ use_names <- as.data.frame(rbind(useA, useB, useC, useD, useE, useF, useG,
 # use type data
 use_raw <- hum_vert_sub %>% 
   dplyr::filter(anyUseTrade == TRUE) %>% 
+  # select useful columns
   dplyr::select(class_name, scientific_name, contains("Trade"), Terrestrial = terrestrial, Freshwater = freshwater, Marine = marine)
 
 # number of Used terrestrial species - 7722
@@ -475,42 +478,30 @@ table(hum_vert_sub$marine, hum_vert_sub$anyUseTrade)
 # multiple uses
 multi_use <- use_raw %>% 
   dplyr::select(starts_with("useTrade")) %>% 
+  # number of uses per species
   dplyr::mutate(tot = rowSums(.)) %>% 
   dplyr::bind_cols(dplyr::select(use_raw, class_name, scientific_name)) %>% 
+  # filter to species with multiple uses
   dplyr::filter(tot > 1)
+
+## Helper functions for euler plots
 
 # function to summarise use data per realm
 use_realm <- function(realm, x) {
   
   out <- use_raw %>% 
+    # select realm
     dplyr::filter(!!sym(realm) == TRUE) %>% 
     dplyr::summarise_at(vars(starts_with("useTrade")), sum) %>% 
     tidyr::gather("useTradeId", "freq", useTradeId.19:useTradeId.31) %>% 
+    # join lookup of use names
     dplyr::left_join(use_names, by = "useTradeId") %>% 
     dplyr::arrange(-freq)
   
   out2 <- use_raw %>% 
+    # select realm
     dplyr::filter(!!sym(realm) == TRUE) %>% 
-    dplyr::select(out$useTradeId[1:3]) %>% 
-    setNames(out$use_name_short[1:3]) %>% 
-    dplyr::mutate(realm = realm)
-  
-  return(out2)
-  
-}  
-
-# function to summarise use data per realm and class
-use_realm_class <- function(realm, class) {
-  
-  out <- use_raw %>% 
-    dplyr::filter(!!sym(realm) == TRUE & class_name == class) %>% 
-    dplyr::summarise_at(vars(starts_with("useTrade")), sum) %>% 
-    tidyr::gather("useTradeId", "freq", useTradeId.19:useTradeId.31) %>% 
-    dplyr::left_join(use_names, by = "useTradeId") %>% 
-    dplyr::arrange(-freq)
-  
-  out2 <- use_raw %>% 
-    dplyr::filter(!!sym(realm) == TRUE & class_name == class) %>% 
+    # top 3 uses
     dplyr::select(out$useTradeId[1:3]) %>% 
     setNames(out$use_name_short[1:3]) %>% 
     dplyr::mutate(realm = realm)
@@ -523,71 +514,92 @@ use_realm_class <- function(realm, class) {
 use_class <- function(class) {
   
   out <- use_raw %>% 
+    # select class
     dplyr::filter(class_name == class) %>% 
     dplyr::summarise_at(vars(starts_with("useTrade")), sum) %>% 
     tidyr::gather("useTradeId", "freq", useTradeId.19:useTradeId.31) %>% 
+    # join lookup of use names
     dplyr::left_join(use_names, by = "useTradeId") %>% 
     dplyr::arrange(-freq)
   
   out2 <- use_raw %>% 
+    # select class
     dplyr::filter(class_name == class) %>% 
+    # top 3 uses
     dplyr::select(out$useTradeId[1:3]) %>% 
-    #dplyr::select(out$useTradeId) %>% 
     setNames(out$use_name_short[1:3]) %>% 
-    #setNames(out$use_name_short) %>% 
     dplyr::mutate(class_name = class)
   
   return(out2)
   
 }
 
+# function to fit and plot euler plots
+gen_euler <- function(df, fill) {
+  
+  # fit euler
+  fit <- eulerr::euler(df, shape = "ellipse")
+  
+  # plot euler
+  eul <- plot(fit, quantities = TRUE, fill = fill, edges = "grey20", labels = list(font = 1))
+  
+  return(eul)
+  
+}
+
+# function to generate titles for euler plots
+plot_title_eu <- function(name, style = "bold.italic", x = 0.2) {
+  
+  title <- cowplot::ggdraw() + 
+  cowplot::draw_label(name, fontface = style, x = x, hjust = 0)
+  
+}
+
 ```
 
-## Euler for uses across realms
+### Euler for uses across realms
 
-Here we calculate the top uses per realm and create the plot for 2
+Here we calculate and plot the top uses per realm (terrestrial, freshwater, marine)
 
 ```{r}
 
-## overall
+top_realms_list <- lapply(realms, use_realm)
 
-overall <- use_raw %>% 
-    dplyr::summarise_at(vars(starts_with("useTrade")), sum) %>% 
-    tidyr::gather("useTradeId", "freq", useTradeId.19:useTradeId.31) %>% 
-    dplyr::left_join(use_names, by = "useTradeId") %>% 
-    dplyr::arrange(-freq)
+# titles for realms
+title_terr <- plot_title_eu(name = "Terrestrial (n = 7,722)")
+title_fresh <- plot_title_eu(name = "Freshwater (n = 5,537)")
+title_mar <- plot_title_eu(name = "Marine (n = 4,288)")
 
-realms <- c("Terrestrial", "Freshwater", "Marine")
+# euler with title - terrestrial
+eu_terr <- gen_euler(dplyr::select(top_realms_list[[1]], -realm), fill = c(pets, food, collect)) %>%
+  # combine title with euler plot
+  cowplot::plot_grid(title_terr, ., nrow = 2, rel_heights = c(0.1, 1))
 
-top_realms <- lapply(realms, use_realm) %>% 
-  dplyr::bind_rows(.) %>% 
-  dplyr::mutate(realm = factor(realm, levels = realms))
+# euler with title - freshwater
+eu_fresh <- gen_euler(dplyr::select(top_realms_list[[2]], -realm), fill = c(food, pets, collect)) %>%
+  # combine title with euler plot
+  cowplot::plot_grid(title_fresh, ., nrow = 2, rel_heights = c(0.1, 1))
 
-top_terr <- top_realms %>% 
-  dplyr::filter(realm == "Terrestrial") %>% 
-  dplyr::summarise_at(vars(-realm), sum)
+# euler with title - marine
+eu_mar <- gen_euler(dplyr::select(top_realms_list[[3]], -realm), fill = c(food, pets, collect)) %>%
+  # combine title with euler plot
+  cowplot::plot_grid(title_mar, ., nrow = 2, rel_heights = c(0.1, 1))
 
-# 5731/7722
-# 3047/7722
-# 619/7722
+# number of Used terrestrial species - 7722
+table(hum_vert_sub$terrestrial, hum_vert_sub$anyUseTrade)
+# number of Used freshwater species - 5537
+table(hum_vert_sub$freshwater, hum_vert_sub$anyUseTrade)
+# number of Used marine species - 4288
+table(hum_vert_sub$marine, hum_vert_sub$anyUseTrade)
 
-fit_realms <- eulerr::euler(top_realms, by = realm, shape = "ellipse")
-
-euler_realms <- plot(fit_realms, quantities = TRUE, labels = list(font = 0.9), edges = "grey20", fills = list(fill = c("#56B4E9", "#E69F00", "#CC79A7")))
-
-# cowplot::save_plot("outputs/euler2.png", euler_realms, base_height = 4, base_width = 11, dpi = 300)
-
-# cowplot::save_plot("outputs/euler2.tiff", euler_realms, base_height = 4, base_width = 11, dpi = 300)
-
-# cowplot::save_plot("outputs/euler2.pdf", euler_realms, base_height = 4, base_width = 11, dpi = 600)
+# order based on number of species used
+eu_realms <- cowplot::plot_grid(eu_terr, eu_fresh, eu_mar, nrow = 1, ncol = 3)
 
 ```
 
-## for each class individually
+### Euler for uses across classes
 
-## Euler for uses across class
-
-Here we calculate the top uses per class
+Here we calculate and plot the top uses per class
 
 ```{r}
 
@@ -617,39 +629,17 @@ overall_class_3 <- overall_class %>%
 
 classes <- unique(use_raw$class_name)
 
-top_class <- lapply(classes, use_class) #%>% 
-  #dplyr::bind_rows(.) #%>% 
-  #dplyr::select(Food, Pets, Collection, Medicine, Clothes, class_name)
-
+top_class <- lapply(classes, use_class)
 # food, pets, collection, medicine, clothes
 
-gen_euler_class <- function(df, fill) {
-  
-  # fit euler
-  fit <- eulerr::euler(df, shape = "ellipse")
-  
-  # plot euler
-  eul <- plot(fit, quantities = TRUE, fill = fill, edges = "grey20", labels = list(font = 1))
-  
-  return(eul)
-  
-}
-
-plot_title_eu <- function(name, style = "bold.italic", x = 0.2) {
-  
-  title <- cowplot::ggdraw() + 
-  cowplot::draw_label(name, fontface = style, x = x, hjust = 0)
-  
-}
-
+# fill colours
 pets <- "#56B4E9"
 food <- "#E69F00"
 collect <- "#CC79A7"
 medi <- "#009E73"
 clothes <-"#D55E00"
 
-# n from verts_used
-
+# titles for each class
 title_act <- plot_title_eu(name = "Ray-finned fishes (n = 6,532)")
 title_amph <- plot_title_eu(name = "Amphibians (n = 592)")
 title_aves <- plot_title_eu(name = "Birds (n = 4,987)")
@@ -657,222 +647,66 @@ title_chon <- plot_title_eu(name = "Cartilaginous fishes (n = 308)")
 title_mam <- plot_title_eu(name = "Mammals (n = 1,324)")
 title_rept <- plot_title_eu(name = "Reptiles (n = 920)")
 
-eu_act <- gen_euler_class(dplyr::select(top_class[[1]], -class_name), fill = c(food, pets, collect)) %>%
+# euler with title - Actinopterygii
+eu_act <- gen_euler(dplyr::select(top_class[[1]], -class_name), fill = c(food, pets, collect)) %>%
+  # combine title with euler plot
   cowplot::plot_grid(title_act, ., nrow = 2, rel_heights = c(0.1, 1))
 
-eu_amph <- gen_euler_class(dplyr::select(top_class[[4]], -class_name), fill = c(pets, food, medi)) %>%
+# euler with title - Amphibia
+eu_amph <- gen_euler(dplyr::select(top_class[[4]], -class_name), fill = c(pets, food, medi)) %>%
+  # combine title with euler plot
   cowplot::plot_grid(title_amph, ., nrow = 2, rel_heights = c(0.1, 1))
 
-eu_aves <- gen_euler_class(dplyr::select(top_class[[6]], -class_name), fill = c(pets, food, collect)) %>%
+# euler with title - Aves
+eu_aves <- gen_euler(dplyr::select(top_class[[6]], -class_name), fill = c(pets, food, collect)) %>%
+  # combine title with euler plot
   cowplot::plot_grid(title_aves, ., nrow = 2, rel_heights = c(0.1, 1))
 
-eu_chon <- gen_euler_class(dplyr::select(top_class[[5]], -class_name), fill = c(food, pets, clothes)) %>%
+# euler with title - Chondrichthyes
+eu_chon <- gen_euler(dplyr::select(top_class[[5]], -class_name), fill = c(food, pets, clothes)) %>%
+  # combine title with euler plot
   cowplot::plot_grid(title_chon, ., nrow = 2, rel_heights = c(0.1, 1))
 
-eu_mam <- gen_euler_class(dplyr::select(top_class[[3]], -class_name), fill = c(food, clothes, medi)) %>%
+# euler with title - Mammalia
+eu_mam <- gen_euler(dplyr::select(top_class[[3]], -class_name), fill = c(food, clothes, medi)) %>%
+  # combine title with euler plot
   cowplot::plot_grid(title_mam, ., nrow = 2, rel_heights = c(0.1, 1))
 
-eu_rept <- gen_euler_class(dplyr::select(top_class[[2]], -class_name), fill = c(pets, food, medi)) %>%
+# euler with title - Reptilia
+eu_rept <- gen_euler(dplyr::select(top_class[[2]], -class_name), fill = c(pets, food, medi)) %>%
+  # combine title with euler plot
   cowplot::plot_grid(title_rept, ., nrow = 2, rel_heights = c(0.1, 1))
 
 # order based on Fig 1a - number of species used
 eu_tax <- cowplot::plot_grid(eu_act, eu_aves, eu_mam, eu_rept, eu_amph, eu_chon, nrow = 2, ncol = 3)
 
-## alternative euler realms
-
-top_realms_list <- lapply(realms, use_realm)
-
-title_terr <- plot_title_eu(name = "Terrestrial (n = 7,722)")
-title_fresh <- plot_title_eu(name = "Freshwater (n = 5,537)")
-title_mar <- plot_title_eu(name = "Marine (n = 4,288)")
-
-eu_terr <- gen_euler_class(dplyr::select(top_realms_list[[1]], -realm), fill = c(pets, food, collect)) %>%
-  cowplot::plot_grid(title_terr, ., nrow = 2, rel_heights = c(0.1, 1))
-
-eu_fresh <- gen_euler_class(dplyr::select(top_realms_list[[2]], -realm), fill = c(food, pets, collect)) %>%
-  cowplot::plot_grid(title_fresh, ., nrow = 2, rel_heights = c(0.1, 1))
-
-eu_mar <- gen_euler_class(dplyr::select(top_realms_list[[3]], -realm), fill = c(food, pets, collect)) %>%
-  cowplot::plot_grid(title_mar, ., nrow = 2, rel_heights = c(0.1, 1))
-
-# number of Used terrestrial species - 7722
-table(hum_vert_sub$terrestrial, hum_vert_sub$anyUseTrade)
-# number of Used freshwater species - 5537
-table(hum_vert_sub$freshwater, hum_vert_sub$anyUseTrade)
-# number of Used marine species - 4288
-table(hum_vert_sub$marine, hum_vert_sub$anyUseTrade)
-
-# order based on number of species used
-eu_realms <- cowplot::plot_grid(eu_terr, eu_fresh, eu_mar, nrow = 1, ncol = 3)
-
 ```
 
-## Combine realms and tax plots
+### Figure 2 combined
 
-Fig 2
+Combine realm and class euler plots
 
 ```{r}
 
 fig2_com <- cowplot::plot_grid(eu_realms, eu_tax, nrow = 2, labels = "AUTO", rel_heights = c(1, 2))
 
-# cowplot::save_plot("outputs/fig2_com_600.png", fig2_com, base_height = 10, base_width = 12, dpi = 600)
+# cowplot::save_plot("figs/fig2_eulers.png", fig2_com, base_height = 10, base_width = 12, dpi = 600)
+
+fig2_com
 
 ```
 
-Here we calculate the top uses per class and realm
-
-```{r}
-
-combi <- list(c("Freshwater", "Actinopterygii"), c("Marine", "Actinopterygii"), c("Terrestrial", "Amphibia"), c("Freshwater", "Amphibia"), c("Terrestrial", "Aves"), c("Freshwater", "Aves"), c("Marine", "Aves"), c("Freshwater", "Chondrichthyes"), c("Marine", "Chondrichthyes"), c("Terrestrial", "Mammalia"), c("Freshwater", "Mammalia"), c("Marine", "Mammalia"), c("Terrestrial", "Reptilia"), c("Freshwater", "Reptilia"), c("Marine", "Reptilia"))
-
-top_realm_class <- lapply(1:length(combi), function(x) {
-  
-  use_realm_class(realm = combi[[x]][1], class = combi[[x]][2])
-  
-})
-
-gen_euler <- function(df) {
-  
-  # fit euler
-  fit <- eulerr::euler(df, by = realm, shape = "ellipse")
-  
-  # plot euler
-  eul <- plot(fit, quantities = TRUE, fill = "white", labels = list(font = 1))
-  
-  return(eul)
-  
-}
-
-plot_title <- function(name, style = "bold", x = 0.4) {
-  
-  title <- cowplot::ggdraw() + 
-  cowplot::draw_label(name, fontface = style, x = x, hjust = 0)
-  
-}
-
-## Actinopterygii
-
-top_act <- dplyr::bind_rows(top_realm_class[[1]], top_realm_class[[2]]) %>% 
-  dplyr::mutate_at(vars(-realm), ~ifelse(is.na(.), FALSE, .)) %>% 
-  dplyr::mutate(realm = factor(realm, levels = realms[2:3]))
-
-title_act <- plot_title(name = "Actinopterygii")
-
-euler_act <- gen_euler(top_act) %>%
-  cowplot::plot_grid(title_act, ., nrow = 2, rel_heights = c(0.1, 1))
-
-## Amphibia
-
-top_amph <- dplyr::bind_rows(top_realm_class[[3]], top_realm_class[[4]]) %>% 
-  dplyr::mutate_at(vars(-realm), ~ifelse(is.na(.), FALSE, .)) %>% 
-  dplyr::mutate(realm = factor(realm, levels = realms[1:2]))
-
-title_amph <- plot_title(name = "Amphibia")
-
-euler_amph <- gen_euler(top_amph) %>% 
-  cowplot::plot_grid(title_amph, ., nrow = 2, rel_heights = c(0.1, 1))
-
-## Aves
-
-top_aves <- dplyr::bind_rows(top_realm_class[[5]], top_realm_class[[6]], top_realm_class[[7]]) %>% 
-  dplyr::mutate_at(vars(-realm), ~ifelse(is.na(.), FALSE, .)) %>% 
-  dplyr::mutate(realm = factor(realm, levels = realms))
-
-title_aves <- plot_title(name = "Aves")
-
-euler_aves <- gen_euler(top_aves) %>% 
-  cowplot::plot_grid(title_aves, ., nrow = 2, rel_heights = c(0.1, 1))
-
-## Chondrichthyes
-
-top_chon <- dplyr::bind_rows(top_realm_class[[8]], top_realm_class[[9]]) %>% 
-  dplyr::mutate_at(vars(-realm), ~ifelse(is.na(.), FALSE, .)) %>% 
-  dplyr::mutate(realm = factor(realm, levels = realms[2:3]))
-
-title_chon <- plot_title(name = "Chondrichthyes")
-
-euler_chon <- gen_euler(top_chon) %>% 
-  cowplot::plot_grid(title_chon, ., nrow = 2, rel_heights = c(0.1, 1))
-
-## Mammalia
-
-top_mam <- dplyr::bind_rows(top_realm_class[[10]], top_realm_class[[11]], top_realm_class[[12]]) %>% 
-  dplyr::mutate_at(vars(-realm), ~ifelse(is.na(.), FALSE, .)) %>% 
-  dplyr::mutate(realm = factor(realm, levels = realms))
-
-title_mam <- plot_title(name = "Mammalia")
-
-euler_mam <- gen_euler(top_mam) %>% 
-  cowplot::plot_grid(title_mam, ., nrow = 2, rel_heights = c(0.1, 1))
-
-## Reptilia
-# doesn't work in normal way - something to do with matrix under euler()
-
-# top_rept <- dplyr::bind_rows(top_realm_class[[13]], top_realm_class[[14]], top_realm_class[[15]]) %>% 
-#   dplyr::mutate_at(vars(-realm), ~ifelse(is.na(.), FALSE, .)) %>% 
-#   dplyr::mutate(realm = factor(realm, levels = realms)) %>% 
-#   dplyr::select(Pets, Food, Medicine, Clothes, `Animal food`, realm)
-# 
-# title_rept <- plot_title(name = "Reptilia")
-# 
-# euler_rept <- gen_euler(top_rept) %>% 
-#   cowplot::plot_grid(title_rept, ., nrow = 2, rel_heights = c(0.1, 1))
-
-marg_rept_terr <- (1 - (764 / 764)) / 2
-marg_rept_fre <- (1 - (71 / 764)) / 2
-marg_rept_mar <- (1 - (24 / 764)) / 2
-
-title_rept_terr <- plot_title("Terrestrial", style = "bold.italic", x = 0.3)
-
-euler_rept_terr <- gen_euler(top_realm_class[[13]]) %>% 
-  cowplot::plot_grid(title_rept_terr, ., nrow = 2, rel_heights = c(0.1, 1))
-
-title_rept_fre <- plot_title("Freshwater", style = "bold.italic", x = 0.3)
-
-euler_rept_fre <- gen_euler(top_realm_class[[14]]) %>% 
-  cowplot::plot_grid(NULL, NULL, NULL, NULL, ., NULL, NULL, NULL, NULL, ncol = 3, nrow = 3, rel_widths = c(marg_rept_fre, 1, marg_rept_fre), rel_heights = c(marg_rept_fre, 1, marg_rept_fre)) %>% 
-  cowplot::plot_grid(title_rept_fre, ., nrow = 2, rel_heights = c(0.1, 1))
-
-title_rept_mar <- plot_title("Marine", style = "bold.italic", x = 0.3)
-
-euler_rept_mar <- gen_euler(top_realm_class[[15]]) %>% 
-  cowplot::plot_grid(NULL, NULL, NULL, NULL, ., NULL, NULL, NULL, NULL, ncol = 3, nrow = 3, rel_widths = c(marg_rept_mar, 1, marg_rept_mar), rel_heights = c(marg_rept_mar, 1, marg_rept_mar)) %>% 
-  cowplot::plot_grid(title_rept_mar, ., nrow = 2, rel_heights = c(0.1, 1))
-
-title_rept <- plot_title(name = "Reptilia")
-
-euler_rept <- cowplot::plot_grid(NULL, euler_rept_terr, euler_rept_fre, euler_rept_mar, NULL, ncol = 5, rel_widths = c(0.5, 1, 1, 1, 0.5)) %>% 
-    cowplot::plot_grid(title_rept, ., nrow = 2, rel_heights = c(0.1, 1))
-
-## Combine taxa
-
-euler_taxa <- cowplot::plot_grid(euler_act, euler_amph, euler_aves, euler_chon, euler_mam, euler_rept, nrow = 6)
-
-# # save: euler_taxa
-# cowplot::save_plot("outputs/euler_taxa.png", euler_taxa, base_width = 7, base_height = 14)
-
-```
-
-## Trait analysis
-
-## 4
+## Trait analysis - Figure 4
 
 ### Load data
 
 ```{r}
 
-# # load: trait data
-# trait <- readr::read_csv("data/trait.csv")
-# 
-# # load: extinction risk data
-# iucn_ex <- readRDS("data/df_iucn_ex.rds")
-# 
-# # load: class data
-# bi_class <- readRDS("data/df_bi_class.rds")
+gl_birds <- readr::read_csv("data/raw/cobi13486-sup-0004-tables4.csv") # see Bird, J.P., Martin, R., Akçakaya, H.R., Gilroy, J., Burfield, I.J., Garnett, S.T., Symes, A., Taylor, J., Şekercioğlu, Ç.H. and Butchart, S.H., 2020. Generation lengths of the world's birds and their implications for extinction risk. Conservation Biology, 34(5), pp.1252-1261.
 
-gl_birds <- readr::read_csv("data/cobi13486-sup-0004-tables4.csv")
-
-gl_mam <- readRDS("data/df_trait.rds") %>% 
+gl_mam <- readRDS("data/raw/df_trait.rds") %>% # see Pacifici, M., Santini, L., Di Marco, M., Baisero, D., Francucci, L., Marasini, G.G., Visconti, P. and Rondinini, C., 2013. Generation length for mammals. Nature Conservation, 5, p.89.
+  # and Cooke, R.S., Eigenbrod, F. and Bates, A.E., 2019. Projected losses of global mammal and bird ecological strategies. Nature Communications, 10(1), pp.1-8.
+  # specifically https://github.com/03rcooke/hyper_pca
   dplyr::filter(class == "Mammalia") %>% 
   dplyr::mutate(GL = 10^GL)
 
@@ -881,26 +715,42 @@ trait <- hum_vert %>%
   dplyr::filter(class_name %in% c("Mammalia", "Aves")) %>% 
   # terrestrial
   dplyr::filter(terrestrial == TRUE) %>% 
+  # select useful columns
   dplyr::select(binomial = scientific_name, class_name:genus_name, dplyr::starts_with("cooke")) %>% 
+  # add generation length for birds
   dplyr::left_join(dplyr::select(gl_birds, Scientific_name, GenLength), by = c("binomial" = "Scientific_name")) %>% 
+  # add generation length for mammals
   dplyr::left_join(dplyr::select(gl_mam, binomial, GL), by = "binomial") %>%
+  # combine bird and mammal generation lengths
   dplyr::mutate(cooke2019gl = ifelse(class_name == "Mammalia", GL, GenLength)) %>% 
   dplyr::select(-GL, -GenLength) %>% 
   dplyr::distinct(binomial, .keep_all = TRUE)
+
+## phylogenetic data
+
+# load: t_pem_mam
+t_pem_mam <- readRDS("data/raw/df_t_pem_mam.rds")
+# phylogenetic eigenvectors matched to species names - using mammal supertree from Fritz et al., 2009 "Geographical variation in predictors of mammalian extinction risk: big is bad, but only in the tropics"
+# see Cooke, R.S., Eigenbrod, F. and Bates, A.E., 2019. Projected losses of global mammal and bird ecological strategies. Nature Communications, 10(1), pp.1-8.
+# specifically see https://github.com/03rcooke/hyper_pca
+
+# load: t_pem_birds
+t_pem_birds <- readRDS("data/raw/df_t_pem_birds.rds")
+# phylogenetic eigenvectors matched to species names - using Prum et al., 2015 "A comprehensive phylogeny of birds (Aves) using targeted next-generation DNA sequencing"
+# see Cooke, R.S., Eigenbrod, F. and Bates, A.E., 2019. Projected losses of global mammal and bird ecological strategies. Nature Communications, 10(1), pp.1-8.
+# specifically see https://github.com/03rcooke/hyper_pca
+
+# comparator predators prey species
+pred_prey_spp <- readr::read_csv("data/raw/comparator_iucn_preyspecies_nodup_withoutssp.csv")
+
+# human
+hum_spp <- readr::read_csv("data/raw/predatorHuman_species_list_withoutssp.csv")
 
 ```
 
 ### Diet axis
 
 ```{r}
-
-# # herb-meat
-# 
-# diet_all <- trait %>%
-#   # select diet data
-#   dplyr::select(binomial, contains("diet")) %>% 
-#   dplyr::mutate(diet_herb = cooke2019diet_fruit + cooke2019diet_nect + cooke2019diet_seed + cooke2019diet_planto) %>% 
-#   dplyr::select(binomial, diet_herb)
 
 ## Calculate synthetic diet trait (principal component from a PCoA of 7 diet categories)
 
@@ -916,13 +766,13 @@ diet_all <- trait %>%
   tibble::column_to_rownames(var = "binomial") %>%
   as.data.frame()
 
-# calculate species x species gower distance matrix based on traits
+# # calculate species x species gower distance matrix based on traits
 # diet_gd <- FD::gowdis(diet_all)
 
 # # perform principal coordinates analysis (PCoA) - run locally
 # diet_pco <- ade4::dudi.pco(diet_gd, scannf = FALSE)
 
-diet_pco <- readRDS("data/diet_pco.rds")
+diet_pco <- readRDS("data/processed/diet_pco.rds")
 
 pc_diet <- diet_pco$tab
 
@@ -937,7 +787,7 @@ pcomp_diet <- as.data.frame(diet_pco$tab[,1:2]) %>%
 # diet category projection
 n <- nrow(diet_all)
 points_stand <- scale(diet_pco$tab[,1:2])
-S <- cov(diet_all, points_stand) # loadings
+S <- cov(dplyr::select(diet_all, -class_name), points_stand) # loadings
 U <- S %*% diag((diet_pco$eig[1:2]/(n-1))^(-0.5))
 colnames(U) <- colnames(diet_pco$tab[,1:2])
 
@@ -957,36 +807,28 @@ U <- U %>%
   mutate(v2 = 0.0003 * mult * A2)
 
 # plot diet PCoA
-pcoa_diet <- ggplot(pcomp_diet, aes(A1, A2)) +
-  # set up plot
-  geom_hline(yintercept = 0, size = 0.2, lty = 2, colour = "grey") +
-  geom_vline(xintercept = 0, size = 0.2, lty = 2, colour = "grey") +
-  # add origin lines
-  #geom_text(alpha = 0.4, size = 1, aes(label = binomial))
-  geom_point() +
+pcoa_diet <- ggplot2::ggplot(pcomp_diet, ggplot2::aes(A1, A2)) +
+  ggplot2::geom_hline(yintercept = 0, size = 0.2, lty = 2, colour = "grey") +
+  ggplot2::geom_vline(xintercept = 0, size = 0.2, lty = 2, colour = "grey") +
   # add species
-  coord_equal() +
-  geom_segment(data = U, aes(x = 0, y = 0, xend = v1, yend = v2), arrow = arrow(length = unit(0.2, "cm")), colour = "darkgrey") +
+  ggplot2::geom_point() +
+  ggplot2::coord_equal() +  
   # add arrows
-  geom_text(data = U, aes(x = v1, y = v2, label = trait), size = 4, colour = "darkgrey") +
-  # nudge_y = c(rep(0, 6), 0.005, 0.005, 0.0005, -0.004),
-            #nudge_x = c(0.005, rep(0, 7), -0.009, 0)
+  ggplot2::geom_segment(data = U, ggplot2::aes(x = 0, y = 0, xend = v1, yend = v2), arrow = ggplot2::arrow(length = ggplot2::unit(0.2, "cm")), colour = "darkgrey") +
   # add arrow labels
-  labs(x = "PC1 (36.2%)", y = "PC2 (15.7%)") +
-  theme(panel.grid.major = element_blank(),
-        panel.grid.minor = element_blank(),
-        axis.text = element_text(colour = "black"),
-        legend.position = "none",
-        text = element_text(size = 20))
+  ggplot2::geom_text(data = U, ggplot2::aes(x = v1, y = v2, label = trait), size = 4, colour = "darkgrey") +
+  ggplot2::labs(x = "PC1 (36.2%)", y = "PC2 (15.7%)") +
+  ggplot2::theme(panel.grid.major = ggplot2::element_blank(),
+                 panel.grid.minor = ggplot2::element_blank(),
+                 axis.text = ggplot2::element_text(colour = "black"),
+                 legend.position = "none",
+                 text = ggplot2::element_text(size = 20))
 
 pcoa_diet
 
-# # save: pcoa_diet
-# cowplot::save_plot("outputs/pcoa_diet.png", pcoa_diet, base_height = 6)
-
 ```
 
-### trait imputation
+### Trait imputation
 
 impute missing trait data using the traits themselves and phylogenetic eigenvectors
 
@@ -999,7 +841,7 @@ tr <- dplyr::select(trait, -contains("diet")) %>%
   dplyr::left_join(pcomp_diet, by = "binomial") %>%
   dplyr::mutate_at(vars(cooke2019body_mass_median, cooke2019gl), log10) %>%
   dplyr::mutate_at(vars(cooke2019hab_breadth, cooke2019litter_clutch_size), sqrt) %>% 
-  dplyr::select(everything(), diet_pc1 = A1, -A2)
+  dplyr::select(dplyr::everything(), diet_pc1 = A1, -A2)
 
 #### random forest imputation ####
 
@@ -1013,12 +855,6 @@ dst <- 15
 tr_mam <- filter(tr, class_name == "Mammalia") %>%
   dplyr::select(-c(class_name:genus_name))
 
-## phylogenetic data
-
-# load: t_pem_mam
-t_pem_mam <- readRDS("data/df_t_pem_mam.rds")
-# phylogenetic eigenvectors matched to species names - using mammal supertree from Fritz et al., 2009 "Geographical variation in predictors of mammalian extinction risk: big is bad, but only in the tropics"
-
 # join trait and phylogenetic data (use first ten eigenvectors - Penone et al., 2014)
 tr_mam <- dplyr::left_join(tr_mam, t_pem_mam, by = "binomial") %>% 
   tibble::column_to_rownames("binomial")
@@ -1029,9 +865,8 @@ summary(tr_mam)
 # 5493 mammals
 # missing: body_mass = 366, gl = 491, diet_pc1 = 557, hab_breadth = 564, litter_size = 2247, phylo = 1007
 
-# 366+491+557+564+2247 = 4225
-# 5493*5 = 27465
-
+# this takes a while to run
+# do imputations for mammals
 imp_mam <- replicate(dst, missForest::missForest(tr_mam, maxiter = 15, ntree = 500, variablewise = TRUE))
 # up to 6 maximum iterations
 
@@ -1040,13 +875,14 @@ imp_dt_mam <- imp_mam[seq(1, (dst * 2), 2)]
 imp_error_mam <- imp_mam[seq(2, (dst * 2), 2)]
 
 imp_error_mam <- lapply(1:dst, function(x) {
-  out <- imp_error_mam[[x]] %>% 
-    data.frame(MSE = .) %>% 
-    dplyr::mutate(var = colnames(imp_dt_mam[[1]])) %>% 
-    dplyr::filter(!var %in% c(paste0("V_", seq(1, 10, by = 1)))) %>% 
-    dplyr::left_join(range_tr_mam, by = "var") %>% 
+  out <- imp_error_mam[[x]] %>%
+    data.frame(MSE = .) %>%
+    dplyr::mutate(var = colnames(imp_dt_mam[[1]])) %>%
+    dplyr::filter(!var %in% c(paste0("V_", seq(1, 10, by = 1)))) %>%
+    dplyr::left_join(range_tr_mam, by = "var") %>%
+    # normalised root mean square error
     dplyr::mutate(NRMSE = sqrt((MSE / range)) * 100)
-  
+
 })
 
 imp_dt_mam <- lapply(1:dst, function(x) {
@@ -1057,25 +893,17 @@ imp_dt_mam <- lapply(1:dst, function(x) {
 
 list_imp_mam <- list(imp_dt_mam, imp_error_mam)
 
-# save: list_imp_mam
-saveRDS(list_imp_mam, "data/list_imp_mam.rds")
+# # save: list_imp_mam
+# saveRDS(list_imp_mam, "data/processed/list_imp_mam.rds")
 
 ## birds ##
 
 tr_birds <- filter(tr, class_name == "Aves") %>%
   dplyr::select(-c(class_name:genus_name))
 
-## phylogenetic data
-
-# load: t_pem_birds
-t_pem_birds <- readRDS("data/df_t_pem_birds.rds")
-# phylogenetic eigenvectors matched to species names - using Prum et al., 2015 "A comprehensive phylogeny of birds (Aves) using targeted next-generation DNA sequencing"
-
 # join trait and phylogenetic data (use first ten eigenvectors - Penone et al., 2014)
 tr_birds <- left_join(tr_birds, t_pem_birds, by = "binomial") %>%
   tibble::column_to_rownames("binomial")
-
-#tr_birds <- readRDS("data/tr_birds.rds")
 
 range_tr_birds <- data.frame(var = c("cooke2019body_mass_median", "cooke2019litter_clutch_size", "cooke2019hab_breadth", "cooke2019gl", "diet_pc1"), range = c((max(tr_birds$cooke2019body_mass_median, na.rm = TRUE) - min(tr_birds$cooke2019body_mass_median, na.rm = TRUE)), (max(tr_birds$cooke2019litter_clutch_size, na.rm = TRUE) - min(tr_birds$cooke2019litter_clutch_size, na.rm = TRUE)), (max(tr_birds$cooke2019hab_breadth, na.rm = TRUE) - min(tr_birds$cooke2019hab_breadth, na.rm = TRUE)), (max(tr_birds$cooke2019gl, na.rm = TRUE) - min(tr_birds$cooke2019gl, na.rm = TRUE)), (max(tr_birds$diet_pc1, na.rm = TRUE) - min(tr_birds$diet_pc1, na.rm = TRUE))))
 
@@ -1083,9 +911,8 @@ range_tr_birds <- data.frame(var = c("cooke2019body_mass_median", "cooke2019litt
 summary(tr_birds)
 # missing: body_mass = 890, gl = 0, diet_pc1 = 1861, hab_breadth = 1951, litter_size = 5275, phylo = 5430
 
-# 890+1861+1951+5275 = 9977
-# 10920*5 = 54600
-
+# this takes a while to run
+# do imputations for birds
 imp_birds <- replicate(dst, missForest::missForest(tr_birds, maxiter = 15, ntree = 500, variablewise = TRUE))
 # 8
 
@@ -1099,6 +926,7 @@ imp_error_birds <- lapply(1:dst, function(x) {
     dplyr::mutate(var = colnames(imp_dt_birds[[1]])) %>% 
     dplyr::filter(!var %in% c(paste0("V_", seq(1, 10, by = 1)))) %>% 
     dplyr::left_join(range_tr_birds, by = "var") %>% 
+    # normalised root mean square error
     dplyr::mutate(NRMSE = sqrt((MSE / range)) * 100)
   
 })
@@ -1111,39 +939,50 @@ imp_dt_birds <- lapply(1:dst, function(x) {
 
 list_imp_birds <- list(imp_dt_birds, imp_error_birds)
 
-# save: list_imp_birds
-saveRDS(list_imp_birds, "data/list_imp_birds.rds")
+# # save: list_imp_birds
+# saveRDS(list_imp_birds, "data/processed/list_imp_birds.rds")
 
 ```
 
-### pca
+### PCA
 
 ```{r}
 
+# number of imputed datasets
 dst <- 15
 
-list_imp_mam <- readRDS("data/list_imp_mam.rds")
-list_imp_birds <- readRDS("data/list_imp_birds.rds")
+#### load trait data ####
 
+list_imp_mam <- readRDS("data/processed/list_imp_mam.rds")
+list_imp_birds <- readRDS("data/processed/list_imp_birds.rds")
+
+#### error ####
+
+# mean and sd of error (NRMSE) for mammals
 error_sum_mam <- dplyr::bind_rows(list_imp_mam[[2]]) %>% 
   dplyr::group_by(var) %>% 
   dplyr::summarise(mean_NRMSE = mean(NRMSE),
                    sd_NRMSE = sd(NRMSE))
 
+# mean and sd of error (NRMSE) for birds
 error_sum_birds <- dplyr::bind_rows(list_imp_birds[[2]]) %>% 
   dplyr::group_by(var) %>% 
   dplyr::summarise(mean_NRMSE = mean(NRMSE),
                    sd_NRMSE = sd(NRMSE))
 
+#### pca ####
+
 trc_mam <- list_imp_mam[[1]]
 trc_birds <- list_imp_birds[[1]]
 
+# join mammals and birds
 trc <- lapply(1:dst, function(x) {
   dplyr::bind_rows(trc_mam[x], trc_birds[x]) %>%
+    # order by scientific name
     arrange(binomial)
 })
 
-#### z-transformation ####
+## z-transformation
 
 # function to z-transform data
 scale_z <- function(x){
@@ -1168,6 +1007,7 @@ prin <- lapply(1:dst, function(x) {
   princomp((trc_z[[x]]), cor = TRUE, scores = TRUE)
 })
 
+# variance explained
 comp_var <- lapply(1:dst, function(x) {prin[[x]]$sdev^2}) %>%
   dplyr::bind_cols() %>%
   dplyr::mutate_all(as.numeric) %>%
@@ -1213,7 +1053,7 @@ sc_mi <- 7
 pcload_sc <- pcload_mean %>%
   # rescale for arrow sizes
   dplyr::mutate_at(vars(dplyr::contains("Comp")), .funs = dplyr::funs(.*sc_mi)) %>%
-  # posh names
+  # tidy names
   dplyr::mutate(trait = c("Body mass", "Generation length", "Habitat breadth", "Litter/clutch size", "Diet"))
 
 # kernel density estimation
@@ -1222,29 +1062,22 @@ pc_raw <- pc_mean %>%
   dplyr::select(., binomial, Comp.1, Comp.2) %>%
   tibble::column_to_rownames(var = "binomial")
 
-# save principal component data
-#write.csv(pc_mean, file = "data/pc.csv", row.names = FALSE)
+# # save principal component data
+# write.csv(pc_mean, file = "data/processed/pc.csv", row.names = FALSE)
 
-pc_mean <- read.csv("data/pc.csv")
+pc_mean <- read.csv("data/processed/pc.csv")
 
-# pc_dich <- pc_mean %>% 
-#   dplyr::select(binomial, Comp.1, Comp.2) %>% 
-#   dplyr::left_join(., dplyr::select(hum_vert, binomial = scientific_name, anyUseTrade, ext, threat_use)) %>% 
-#   dplyr::mutate(threat_ext = ifelse(ext == TRUE & threat_use == TRUE, "TRUE", "FALSE"),
-#                 used = ifelse(anyUseTrade == TRUE, "Used", "Not used"),
-#                 threat = ifelse(anyUseTrade == TRUE & threat_ext == TRUE, "Threatened by use",
-#                                 ifelse(anyUseTrade == TRUE & threat_ext == FALSE, "Used but not\nthreatened by use", "Not used"))) %>% 
-#   dplyr::mutate(threat = factor(threat, levels = c("Not used", "Used but not\nthreatened by use", "Threatened by use")))
-
+# principal components for use categories
 pc_dich <- pc_mean %>% 
   dplyr::select(binomial, Comp.1, Comp.2) %>% 
-  dplyr::left_join(., dplyr::select(hum_vert, binomial = scientific_name, anyUseTrade, ext, threat_use)) %>% 
+  dplyr::left_join(., dplyr::select(hum_vert, binomial = scientific_name, anyUseTrade, ext, threat_use), by = "binomial") %>% 
   dplyr::mutate(used = ifelse(anyUseTrade == TRUE, "Used", "Not used")) %>% 
   dplyr::mutate(grp = ifelse(ext == TRUE & anyUseTrade == TRUE & threat_use == TRUE, "Threatened & use considered threat", used)) %>% 
   dplyr::mutate(grp = factor(grp, levels = c("Not used", "Used", "Threatened & use considered threat")))
 
-# kernel function
+#### kernels and contours ####
 
+# function to calculate kernels
 cl <- function(df, prob) {
   dx <- diff(df$x[1:2])
   dy <- diff(df$y[1:2])
@@ -1253,6 +1086,7 @@ cl <- function(df, prob) {
   approx(c1, sz, xout = 1 - prob)$y
 }
 
+# function to calculate contours
 contours_dich <- function(used_col, used_dich) {
 
   pc_raw_dich <- pc_raw %>%
@@ -1277,41 +1111,44 @@ contours_dich <- function(used_col, used_dich) {
   return(list(dcc, cl_50))
 }
 
+# contours
 cont_nused <- contours_dich(used_col = "grp", used_dich = "Not used")
 cont_used <- contours_dich(used_col = "grp", used_dich = c("Used", "Threatened & use considered threat"))
 cont_thrt <- contours_dich(used_col = "grp", used_dich = "Threatened & use considered threat")
 
 table(pc_dich$grp)
 
-pca_used <- ggplot(cont_nused[[1]], aes(x = Var1, y = Var2)) +
-  # add arrows
-  geom_segment(data = pcload_sc, aes(x = 0, y = 0, xend = Comp.1, yend = Comp.2), arrow = arrow(length = unit(0.2, "cm")), colour = "black") +
-  geom_segment(data = pcload_sc, aes(x = 0, y = 0, xend = -Comp.1, yend = -Comp.2), lty = 5, colour = "darkgrey") +
-  # add species
-  geom_point(data = pc_dich, aes(colour = grp, x = Comp.1, y = Comp.2), size = 0.03, alpha = 0.8) +
-  # add arrow labels
-  geom_text(data = pcload_sc, aes(x = Comp.1, y = Comp.2, label = trait), size = 4, nudge_x = c(0, 0, 0, 0, -0.6), nudge_y = c(0.3, -0.2, -0.4, 0.3, -0.3)) +
-  geom_contour(data = cont_nused[[1]], aes(z = value), breaks = cont_nused[[2]], colour = "grey67", size = 1.4) +
-  geom_contour(data = cont_used[[1]], aes(z = value), breaks = cont_used[[2]], colour = "#fd8d3c", size = 1.4) +
-  geom_contour(data = cont_thrt[[1]], aes(z = value), breaks = cont_thrt[[2]], colour = "#a50f15", size = 1.4) +
-  coord_equal() +
-  # axis labels
-  labs(x = "PC1 (38.8%)", y = "PC2 (24.2%)", colour = "", alpha = "") +
-  # change size of point in legend
-  guides(colour = guide_legend(override.aes = list(size = 2, alpha = 1))) + 
-  scale_colour_manual(values = c("grey", "#fd8d3c", "#a50f15"), labels = c("Not used (n = 10,169)", "Used (n = 5,268 + 976)", "Extinction risk & use\nconsidered threat (n = 976)")) +
-  theme(legend.position = c(0.62, 0.95))
+#### Fig 4a ####
 
-# cowplot::save_plot("outputs/pca_threat.png", pca_threat, base_width = 10, base_height = 6, dpi = 300)
+# pca plot
+pca_used <- ggplot2::ggplot(cont_nused[[1]], ggplot2::aes(x = Var1, y = Var2)) +
+  # add arrows
+  ggplot2::geom_segment(data = pcload_sc, ggplot2::aes(x = 0, y = 0, xend = Comp.1, yend = Comp.2), arrow = ggplot2::arrow(length = ggplot2::unit(0.2, "cm")), colour = "black") +
+  ggplot2::geom_segment(data = pcload_sc, ggplot2::aes(x = 0, y = 0, xend = -Comp.1, yend = -Comp.2), lty = 5, colour = "darkgrey") +
+  # add species
+  ggplot2::geom_point(data = pc_dich, ggplot2::aes(colour = grp, x = Comp.1, y = Comp.2), size = 0.03, alpha = 0.8) +
+  # add arrow labels
+  ggplot2::geom_text(data = pcload_sc, ggplot2::aes(x = Comp.1, y = Comp.2, label = trait), size = 4, nudge_x = c(0, 0, 0, 0, -0.6), nudge_y = c(0.3, -0.2, -0.4, 0.3, -0.3)) +
+  ggplot2::geom_contour(data = cont_nused[[1]], ggplot2::aes(z = value), breaks = cont_nused[[2]], colour = "grey67", size = 1.4) +
+  ggplot2::geom_contour(data = cont_used[[1]], ggplot2::aes(z = value), breaks = cont_used[[2]], colour = "#fd8d3c", size = 1.4) +
+  ggplot2::geom_contour(data = cont_thrt[[1]], ggplot2::aes(z = value), breaks = cont_thrt[[2]], colour = "#a50f15", size = 1.4) +
+  ggplot2::coord_equal() +
+  # axis labels
+  ggplot2::labs(x = "PC1 (38.8%)", y = "PC2 (24.2%)", colour = "", alpha = "") +
+  # change size of point in legend
+  ggplot2::guides(colour = ggplot2::guide_legend(override.aes = list(size = 2, alpha = 1))) + 
+  ggplot2::scale_colour_manual(values = c("grey", "#fd8d3c", "#a50f15"), labels = c("Not used (n = 10,169)", "Used (n = 5,268 + 976)", "Extinction risk & use\nconsidered threat (n = 976)")) +
+  ggplot2::theme(legend.position = c(0.62, 0.95))
 
 ```
 
-## Hypervolumes
+### Hypervolumes
 
 ```{r}
 
-#### Observed hypervolumes
+#### observed hypervolumes ####
 
+# function to calculate observed hypervolumes
 hyp <- function(used_col, used_dich) {
   
   pc_mean_dich <- pc_mean %>% 
@@ -1321,10 +1158,6 @@ hyp <- function(used_col, used_dich) {
   # calculate observed hypervolumes
 
   hyp_dich <- hypervolume::hypervolume_svm(pc_mean_dich)
-
-  # double default number of samples per point
-  # samples.per.point = 2 * ceiling((10^(3 + sqrt(ncol(pc_used))))/nrow(pc_used)) 
-  # do this if I need to reduce stochasticity
   
 }
 
@@ -1332,27 +1165,28 @@ hyp <- function(used_col, used_dich) {
 # hyp_used <- hyp(used_col = "used", used_dich = c("Used"))
 # hyp_thrt <- hyp(used_col = "grp", used_dich = c("Threatened by use"))
 # 
-# saveRDS(hyp_nused, "data/hyp_nused.rds")
-# saveRDS(hyp_used, "data/hyp_used.rds")
-# saveRDS(hyp_thrt, "data/hyp_thrt.rds")
+# saveRDS(hyp_nused, "data/processed/hyp_nused.rds")
+# saveRDS(hyp_used, "data/processed/hyp_used.rds")
+# saveRDS(hyp_thrt, "data/processed/hyp_thrt.rds")
 
-hyp_nused <- readRDS("data/hyp_nused.rds")
-hyp_used <- readRDS("data/hyp_used.rds")
-hyp_thrt <- readRDS("data/hyp_thrt.rds")
+hyp_nused <- readRDS("data/processed/hyp_nused.rds")
+hyp_used <- readRDS("data/processed/hyp_used.rds")
+hyp_thrt <- readRDS("data/processed/hyp_thrt.rds")
 
 # observed volumes
 obs_nused <- hyp_nused@Volume
 obs_used <- hyp_used@Volume
 obs_thrt <- hyp_thrt@Volume
 
-#### rarefied overlap
+#### rarefied overlap ####
 
 # number of permutations
 nper <- 333
 
-# random samples with equivalent number of species
+# function to generate random samples with equivalent number of species to observed
 rn_over <- function(hyp_dich) {
   
+  # read observed hypervolume
   hyp_small <- readRDS(paste0("data/hyp_", hyp_dich, ".rds"))
   
   print(nrow(hyp_small@Data))
@@ -1360,14 +1194,18 @@ rn_over <- function(hyp_dich) {
   # comparative number of species
   print(nrow(pc_mean))
   
+  # sample equivalent number of species to observed
   pc_mean <- pc_mean %>% 
     dplyr::sample_n(size = nrow(hyp_small@Data)) %>%
     tibble::column_to_rownames("binomial")
 
+  # calculate hypervolume for random species
   hyp_rn_dich <- hypervolume::hypervolume_svm(pc_mean)
-
+  
+  # join observed and random hypervolumes
   set_hyps <- hypervolume::hypervolume_set(hyp_small, hyp_rn_dich, check.memory = FALSE)
 
+  # calculate overlap stats
   overlap_hyps <- hypervolume::hypervolume_overlap_statistics(set_hyps) %>% 
     t() %>% 
     as.data.frame() %>% 
@@ -1383,26 +1221,31 @@ rn_over <- function(hyp_dich) {
 # rn_used <- replicate(nper, rn_over(hyp_dich = "used"), simplify = FALSE) %>% 
 #   dplyr::bind_rows(.)
 # 
-# saveRDS(rn_used, "data/rn_used_glob_333.rds")
+# saveRDS(rn_used, "data/processed/rn_used_glob_333.rds")
 # 
+# # remove as these are large objects
 # rm(rn_used); gc()
 
 # # 976 vs 16,413 species
 # rn_thrt <- replicate(nper, rn_over(hyp_dich = "thrt"), simplify = FALSE) %>% 
 #   dplyr::bind_rows(.)
 # 
-# saveRDS(rn_thrt, "data/rn_thrt_glob_333.rds")
+# saveRDS(rn_thrt, "data/processed/rn_thrt_glob_333.rds")
 
-# volume
+# load hypervolume metrics
+rn_used <- readRDS("data/processed/rn_used_glob_333.rds")
 
-rn_used <- readRDS("data/rn_used_glob_333.rds")
+rn_thrt <- readRDS("data/processed/rn_thrt_glob_333.rds")
 
-rn_thrt <- readRDS("data/rn_thrt_glob_333.rds")
+# combine hypervolume metrics across comparisons
+rn_vol <- dplyr::bind_rows(rn_used %>% 
+                             tidyr::gather(obs_rnd, vol, obs_vol:rnd_vol) %>% dplyr::mutate(grp = "Used"), 
+                           rn_thrt %>% 
+                             tidyr::gather(obs_rnd, vol, obs_vol:rnd_vol) %>%
+                             dplyr::mutate(grp = "Extinction risk & use\nconsidered threat")) %>% 
+  dplyr::mutate(grp = factor(grp, levels = c("Used", "Extinction risk & use\nconsidered threat")))
 
-rn_vol <- dplyr::bind_rows(rn_used %>% tidyr::gather(obs_rnd, vol, obs_vol:rnd_vol) %>% dplyr::mutate(grp = "Used"), rn_thrt %>% tidyr::gather(obs_rnd, vol, obs_vol:rnd_vol) %>% dplyr::mutate(grp = "Extinction risk & use\nconsidered threat")) %>% 
-    dplyr::mutate(grp = factor(grp, levels = c("Used", "Extinction risk & use\nconsidered threat")))
-
-# stats test
+# permutation test of volumes
 test_vol <- rn_vol %>% 
   tidyr::spread(obs_rnd, vol) %>% 
   dplyr::mutate(p_great = ifelse(rnd_vol > obs_vol, 1, 0),
@@ -1415,27 +1258,34 @@ test_vol <- rn_vol %>%
   dplyr::mutate(p_great_adj = 1 - p_great_test,
                 p_less_adj = 1 - p_less_test)
 
-rang_vol <- data.frame(obs_rnd = rep(c("obs_vol", "rnd_vol"), 2), vol = c(mean(rn_used$obs_vol), median(rn_used$rnd_vol), median(rn_thrt$obs_vol), mean(rn_thrt$rnd_vol)), ymin = c(quantile(rn_used$obs_vol, 0.025), quantile(rn_used$rnd_vol, 0.025), quantile(rn_thrt$obs_vol, 0.025), quantile(rn_thrt$rnd_vol, 0.025)), ymax = c(quantile(rn_used$obs_vol, 0.975), quantile(rn_used$rnd_vol, 0.975), quantile(rn_thrt$obs_vol, 0.975), quantile(rn_thrt$rnd_vol, 0.975)), grp = rep(c("Used", "Extinction risk & use\nconsidered threat"), each = 2)) %>% 
+# dataframe of volumes for each group (comparison)
+rang_vol <- data.frame(obs_rnd = rep(c("obs_vol", "rnd_vol"), 2), 
+                       vol = c(mean(rn_used$obs_vol), median(rn_used$rnd_vol), median(rn_thrt$obs_vol), mean(rn_thrt$rnd_vol)), 
+                       ymin = c(quantile(rn_used$obs_vol, 0.025), quantile(rn_used$rnd_vol, 0.025), quantile(rn_thrt$obs_vol, 0.025), quantile(rn_thrt$rnd_vol, 0.025)), 
+                       ymax = c(quantile(rn_used$obs_vol, 0.975), quantile(rn_used$rnd_vol, 0.975), quantile(rn_thrt$obs_vol, 0.975), quantile(rn_thrt$rnd_vol, 0.975)), 
+                       grp = rep(c("Used", "Extinction risk & use\nconsidered threat"), each = 2)) %>% 
     dplyr::mutate(grp = factor(grp, levels = c("Used", "Extinction risk & use\nconsidered threat")))
 
-lin_vol <- data.frame(yintercept = c(mean(rn_used$rnd_vol), mean(rn_thrt$rnd_vol)), grp = c("Used", "Extinction risk & use\nconsidered threat"))
+lin_vol <- data.frame(yintercept = c(mean(rn_used$rnd_vol), mean(rn_thrt$rnd_vol)), grp = factor(c("Used", "Extinction risk & use\nconsidered threat"), levels = c("Used", "Extinction risk & use\nconsidered threat")))
 
-vol_plot <- ggplot(data = rn_vol, aes(x = obs_rnd, y = vol)) +
+#### Fig 4B
+
+# plot of volume comparisons
+vol_plot <- ggplot2::ggplot(data = rn_vol, ggplot2::aes(x = obs_rnd, y = vol)) +
   # keep plot layout
-  geom_point(colour = "white") +
-  geom_hline(data = lin_vol, aes(yintercept = yintercept), lty = 2, colour = c("#fd8d3c", "#a50f15")) +
+  ggplot2::geom_point(colour = "white") +
+  ggplot2::geom_hline(data = lin_vol, ggplot2::aes(yintercept = yintercept), lty = 2, colour = c("#fd8d3c", "#a50f15")) +
   # half violin
-  geom_half_violin(data = dplyr::filter(rn_vol, obs_rnd == "rnd_vol"), aes(fill = grp), side = "r", colour = NA, scale = "count", alpha = 0.4) +
-  #geom_half_point(data = dplyr::filter(rn_vol, obs_rnd == "rnd_vol"), aes(colour = grp), side = "r", alpha = 0.1) +
+  gghalves::geom_half_violin(data = dplyr::filter(rn_vol, obs_rnd == "rnd_vol"), ggplot2::aes(fill = grp), side = "r", colour = NA, scale = "count", alpha = 0.4) +
   # pointrange
-  geom_pointrange(data = rang_vol, aes(ymin = ymin, ymax = ymax), pch = 15, colour = c("#fd8d3c", "#fd8d3c", "#a50f15", "#a50f15"), lwd = 1) +
-  scale_colour_manual(values = c("#fd8d3c", "#a50f15")) +
-  scale_fill_manual(values = c("#fd8d3c", "#a50f15")) +
-  scale_x_discrete(labels = c("Observed", "Random")) +
-  labs(y = bquote("Volume "~(SD^5))) +
-  facet_wrap(~grp) +
-  theme(legend.position = "none",
-        axis.title.x = element_blank())
+  ggplot2::geom_pointrange(data = rang_vol, ggplot2::aes(ymin = ymin, ymax = ymax), pch = 15, colour = c("#fd8d3c", "#fd8d3c", "#a50f15", "#a50f15"), lwd = 1) +
+  ggplot2::scale_colour_manual(values = c("#fd8d3c", "#a50f15")) +
+  ggplot2::scale_fill_manual(values = c("#fd8d3c", "#a50f15")) +
+  ggplot2::scale_x_discrete(labels = c("Observed", "Random")) +
+  ggplot2::labs(y = bquote("Volume "~(SD^5))) +
+  ggplot2::facet_wrap(~grp) +
+  ggplot2::theme(legend.position = "none",
+                 axis.title.x = ggplot2::element_blank())
 
 # unique
 
@@ -1443,7 +1293,7 @@ rn_uni <- dplyr::bind_rows(rn_used %>% tidyr::gather(obs_rnd, uni, frac_unique_1
     dplyr::mutate(grp = factor(grp, levels = c("Used", "Extinction risk & use\nconsidered threat"))) %>% 
   dplyr::mutate(uni = uni * 100)
 
-# stats test
+# permutation test for unique fractions
 test_uni <- rn_uni %>% 
   tidyr::spread(obs_rnd, uni) %>% 
   dplyr::mutate(p_great = ifelse(frac_unique_2 > frac_unique_1, 1, 0),
@@ -1456,105 +1306,50 @@ test_uni <- rn_uni %>%
   dplyr::mutate(p_great_adj = 1 - p_great_test,
                 p_less_adj = 1 - p_less_test)
 
-rang_uni <- data.frame(obs_rnd = rep(c("frac_unique_1", "frac_unique_2"), 2), uni = c(median(rn_used$frac_unique_1), median(rn_used$frac_unique_2), mean(rn_thrt$frac_unique_1), mean(rn_thrt$frac_unique_2)), ymin = c(quantile(rn_used$frac_unique_1, 0.025), quantile(rn_used$frac_unique_2, 0.025), quantile(rn_thrt$frac_unique_1, 0.025), quantile(rn_thrt$frac_unique_2, 0.025)), ymax = c(quantile(rn_used$frac_unique_1, 0.975), quantile(rn_used$frac_unique_2, 0.975), quantile(rn_thrt$frac_unique_1, 0.975), quantile(rn_thrt$frac_unique_2, 0.975)), grp = rep(c("Used", "Extinction risk & use\nconsidered threat"), each = 2)) %>% 
+# dataframe of unique fractions for each group (comparison)
+rang_uni <- data.frame(obs_rnd = rep(c("frac_unique_1", "frac_unique_2"), 2), 
+                       uni = c(median(rn_used$frac_unique_1), median(rn_used$frac_unique_2), mean(rn_thrt$frac_unique_1), mean(rn_thrt$frac_unique_2)), 
+                       ymin = c(quantile(rn_used$frac_unique_1, 0.025), quantile(rn_used$frac_unique_2, 0.025), quantile(rn_thrt$frac_unique_1, 0.025), quantile(rn_thrt$frac_unique_2, 0.025)), 
+                       ymax = c(quantile(rn_used$frac_unique_1, 0.975), quantile(rn_used$frac_unique_2, 0.975), quantile(rn_thrt$frac_unique_1, 0.975), quantile(rn_thrt$frac_unique_2, 0.975)), 
+                       grp = rep(c("Used", "Extinction risk & use\nconsidered threat"), each = 2)) %>% 
     dplyr::mutate(grp = factor(grp, levels = c("Used", "Extinction risk & use\nconsidered threat"))) %>% 
   dplyr::mutate_at(vars(uni, ymin, ymax), ~ . * 100)
 
-lin_uni <- data.frame(yintercept = c(mean(rn_used$frac_unique_2), mean(rn_thrt$frac_unique_2)), grp = c("Used", "Extinction risk & use\nconsidered threat")) %>% 
+lin_uni <- data.frame(yintercept = c(mean(rn_used$frac_unique_2), mean(rn_thrt$frac_unique_2)), grp = factor(c("Used", "Extinction risk & use\nconsidered threat"), levels = c("Used", "Extinction risk & use\nconsidered threat"))) %>% 
   dplyr::mutate(yintercept = yintercept * 100)
 
-uni_plot <- ggplot(data = rn_uni, aes(x = obs_rnd, y = uni)) +
+#### Fig 4C
+
+# plot of unique fractions comparisons
+uni_plot <- ggplot2::ggplot(data = rn_uni, ggplot2::aes(x = obs_rnd, y = uni)) +
   # keep plot layout
-  geom_point(colour = "white") +
-  geom_hline(data = lin_uni, aes(yintercept = yintercept), lty = 2, colour = c("#fd8d3c", "#a50f15")) +
+  ggplot2::geom_point(colour = "white") +
+  ggplot2::geom_hline(data = lin_uni, ggplot2::aes(yintercept = yintercept), lty = 2, colour = c("#fd8d3c", "#a50f15")) +
   # half violin
-  geom_half_violin(aes(fill = grp), side = "r", colour = NA, scale = "count", alpha = 0.4) +
-  #geom_half_point(aes(colour = grp), side = "r", alpha = 0.1) +
+  gghalves::geom_half_violin(ggplot2::aes(fill = grp), side = "r", colour = NA, scale = "count", alpha = 0.4) +
   # pointrange
-  geom_pointrange(data = rang_uni, aes(ymin = ymin, ymax = ymax), pch = 15, colour = c("#fd8d3c", "#fd8d3c", "#a50f15", "#a50f15"), lwd = 1) +
-  scale_colour_manual(values = c("#fd8d3c", "#a50f15")) +
-  scale_fill_manual(values = c("#fd8d3c", "#a50f15")) +
-  scale_x_discrete(labels = c("Observed", "Random")) +
-  labs(y = "Percent unique volume") +
-  facet_wrap(~grp) +
-  theme(legend.position = "none",
-        axis.title.x = element_blank())
-
-
-# DIFFERENCE
-
-vol_diff <- dplyr::bind_rows(rn_used %>% dplyr::mutate(grp = "Used"), rn_thrt %>% dplyr::mutate(grp = "Extinction risk & use\nconsidered threat")) %>% 
-  dplyr::mutate(grp = factor(grp, levels = c("Used", "Extinction risk & use\nconsidered threat"))) %>% 
-  dplyr::mutate(diff_vol = obs_vol - rnd_vol)
-
-rang_diff_vol <- vol_diff %>% 
-  dplyr::group_by(grp) %>% 
-  dplyr::summarise(median_diff = median(diff_vol),
-                   ymin = quantile(diff_vol, 0.025),
-                   ymax = quantile(diff_vol, 0.975))
-
-vol_diff_plot <- ggplot(data = vol_diff, aes(x = "Used", y = diff_vol)) +
-  # keep plot layout
-  geom_point(colour = "white") +
-  geom_hline(aes(yintercept = 0), lty = 2, lwd = 1, colour = "darkgrey") +
-  # half violin
-  geom_half_violin(data = vol_diff, aes(fill = grp), side = "r", colour = NA, scale = "count", alpha = 0.4) +
-  # pointrange
-  geom_pointrange(data = rang_diff_vol, aes(y = median_diff, ymin = ymin, ymax = ymax), pch = 15, colour = c("#fd8d3c", "#a50f15"), lwd = 1) +
-  scale_colour_manual(values = c("#fd8d3c", "#a50f15")) +
-  scale_fill_manual(values = c("#fd8d3c", "#a50f15")) +
-  labs(y = bquote(atop("Difference in volume "~(SD^5), "compared to random"))) +
-  facet_wrap(~grp) +
-  theme(legend.position = "none",
-        axis.title.x = element_blank(),
-        axis.text.x = element_blank(),
-        axis.ticks.x = element_blank())
-
-uni_diff <- vol_diff %>% 
-  dplyr::mutate(diff_uni = (frac_unique_1 - frac_unique_2) * 100)
-
-rang_diff_uni <- uni_diff %>% 
-  dplyr::group_by(grp) %>% 
-  dplyr::summarise(median_diff = median(diff_uni),
-                   ymin = quantile(diff_uni, 0.025),
-                   ymax = quantile(diff_uni, 0.975))
-
-uni_diff_plot <- ggplot(data = uni_diff, aes(x = "Used", y = diff_uni)) +
-  # keep plot layout
-  geom_point(colour = "white") +
-  geom_hline(aes(yintercept = 0), lty = 2, lwd = 1, colour = "darkgrey") +
-  # half violin
-  geom_half_violin(data = uni_diff, aes(fill = grp), side = "r", colour = NA, scale = "count", alpha = 0.4) +
-  # pointrange
-  geom_pointrange(data = rang_diff_uni, aes(y = median_diff, ymin = ymin, ymax = ymax), pch = 15, colour = c("#fd8d3c", "#a50f15"), lwd = 1) +
-  scale_colour_manual(values = c("#fd8d3c", "#a50f15")) +
-  scale_fill_manual(values = c("#fd8d3c", "#a50f15")) +
-  labs(y = bquote(atop("Difference in unique volume (%)", "compared to random"))) +
-  facet_wrap(~grp) +
-  theme(legend.position = "none",
-        axis.title.x = element_blank(),
-        axis.text.x = element_blank(),
-        axis.ticks.x = element_blank())
-
-# # combine Fig 4 - instead see lower down with comparator volumes
-# 
-# fig4 <- cowplot::plot_grid(pca_used, NULL, cowplot::plot_grid(vol_plot, uni_plot, labels = c("B", "C"), nrow = 2), ncol = 3, rel_widths = c(1, 0.1, 1), labels = c("A", "", ""))
-# 
-# # cowplot::save_plot("outputs/fig4_glob.png", fig4, base_width = 12, base_height = 6, dpi = 300)
+  ggplot2::geom_pointrange(data = rang_uni, ggplot2::aes(ymin = ymin, ymax = ymax), pch = 15, colour = c("#fd8d3c", "#fd8d3c", "#a50f15", "#a50f15"), lwd = 1) +
+  ggplot2::scale_colour_manual(values = c("#fd8d3c", "#a50f15")) +
+  ggplot2::scale_fill_manual(values = c("#fd8d3c", "#a50f15")) +
+  ggplot2::scale_x_discrete(labels = c("Observed", "Random")) +
+  ggplot2::labs(y = "Percent unique volume") +
+  ggplot2::facet_wrap(~grp) +
+  ggplot2::theme(legend.position = "none",
+                 axis.title.x = ggplot2::element_blank())
 
 ```
 
-## Comparator predator hypervolumes
+### Comparator predator hypervolumes
 
 ```{r}
 
-pred_prey_spp <- read.csv("data/comparator_iucn_preyspecies_nodup_withoutssp.csv", stringsAsFactors = FALSE)
+#### observed hypervolumes for comparable predators ####
 
-#### Observed hypervolumes
-
+# function to calcualte hypervolumes for comparable predator species
 hyp_pred_prey <- function(s, df) {
   
   prey_spp <- df %>% 
+    # select predator species
     dplyr::filter(predator_species == s)
   
   pc_mean_pred <- pc_mean %>% 
@@ -1562,7 +1357,6 @@ hyp_pred_prey <- function(s, df) {
     tibble::column_to_rownames("binomial")
   
   # calculate observed hypervolumes
-
   hyp_pred <- hypervolume::hypervolume_svm(pc_mean_pred, samples.per.point = 4 * ceiling((10^(3 + sqrt(ncol(pc_mean_pred))))/nrow(pc_mean_pred)), verbose = FALSE)
   
   hyp_out <- list(name = s,
@@ -1577,9 +1371,9 @@ hyp_pred_prey <- function(s, df) {
 
 # hyp_pred <- lapply(unique(pred_prey_spp$predator_species)[1:20], hyp_pred_prey, df = pred_prey_spp)
 # 
-# saveRDS(hyp_pred, "data/hyp_pred.rds")
+# saveRDS(hyp_pred, "data/processed/hyp_pred.rds")
 
-hyp_pred <- readRDS("data/hyp_pred.rds")
+hyp_pred <- readRDS("data/processed/hyp_pred.rds")
 
 hyp_names <- sapply(1:length(hyp_pred), function(i) hyp_pred[[i]][[1]])
 hyp_vol <- sapply(1:length(hyp_pred), function(i) hyp_pred[[i]][[4]]@Volume)
@@ -1588,6 +1382,7 @@ hyp_perc_match <- lapply(1:length(hyp_pred), function(i) hyp_pred[[i]][[2]]) %>%
   dplyr::bind_rows() %>% 
   dplyr::mutate(binomial = hyp_names) %>% 
   dplyr::mutate(perc = match_spp / prey_spp) %>% 
+  # 80% threshold
   dplyr::filter(perc > 0.8)
 
 hyp_vol_df <- data.frame(binomial = hyp_names, vol = hyp_vol, stringsAsFactors = FALSE) %>% 
@@ -1595,36 +1390,11 @@ hyp_vol_df <- data.frame(binomial = hyp_names, vol = hyp_vol, stringsAsFactors =
 
 ## humans
 
-hum_spp <- read.csv("data/predatorHuman_species_list_withoutssp.csv", stringsAsFactors = FALSE)
-
-# food
-
-hum_food <- dplyr::filter(hum_spp, uTID19 == TRUE)
-
-# hyp_hum_food <- lapply(hyp_vol_df$binomial, hyp_pred_prey, df = hum_food)
-# 
-# saveRDS(hyp_hum_food, "data/hyp_hum_food.rds")
-
-hyp_hum_food <- readRDS("data/hyp_hum_food.rds")
-
-hyp_hum_food_names <- sapply(1:length(hyp_hum_food), function(i) hyp_hum_food[[i]][[1]])
-hyp_hum_food_vol <- sapply(1:length(hyp_hum_food), function(i) hyp_hum_food[[i]][[4]]@Volume)
-
-hyp_hum_food_perc_match <- lapply(1:length(hyp_hum_food), function(i) hyp_hum_food[[i]][[2]]) %>% 
-  dplyr::bind_rows() %>% 
-  dplyr::mutate(binomial = hyp_hum_food_names) %>% 
-  dplyr::mutate(perc = match_spp / prey_spp)
-
-hyp_hum_food_vol_df <- data.frame(binomial = hyp_hum_food_names, vol = hyp_hum_food_vol, stringsAsFactors = FALSE) %>% 
-  dplyr::filter(binomial %in% hyp_hum_food_perc_match$binomial)
-
-# all
-
 # hyp_hum <- lapply(hyp_vol_df$binomial, hyp_pred_prey, df = hum_spp)
 # 
-# saveRDS(hyp_hum, "data/hyp_hum.rds")
+# saveRDS(hyp_hum, "data/processed/hyp_hum.rds")
 
-hyp_hum <- readRDS("data/hyp_hum.rds")
+hyp_hum <- readRDS("data/processed/hyp_hum.rds")
 
 hyp_hum_names <- sapply(1:length(hyp_hum), function(i) hyp_hum[[i]][[1]])
 hyp_hum_vol <- sapply(1:length(hyp_hum), function(i) hyp_hum[[i]][[4]]@Volume)
@@ -1663,16 +1433,20 @@ hypc_hum <- hypc_prep %>%
 hypc_dumb <- dplyr::bind_rows(hypc_pred, hypc_hum) %>% 
   dplyr::mutate(type = factor(type, levels = c("pred", "hum")))
 
+# scaling parameters for icons
 sil <- 30
 fish <- 0.8
 owl <- 1.1
 dis <- -80
 
-hypc_dumb_plot <- ggplot(data = hypc_dumb, aes(x = div, y = common_name)) +
-  geom_line(aes(group = pair)) +
-  geom_point(aes(color = type), size = 3) +
-  geom_text(data = hypc_pred, aes(x = div - 30, label = ifelse(div < 10, sprintf("%.1f", round(div, digits = 1)), round(div, digits = 0))), colour = "#CC79A7") +
-  geom_text(data = hypc_hum, aes(x = div + 30, label = ifelse(div < 10, sprintf("%.1f", round(div, digits = 1)), round(div, digits = 0))), colour = "#0072B2") +  
+## Figure 4D
+
+# dumbbell plot
+hypc_dumb_plot <- ggplot2::ggplot(data = hypc_dumb, ggplot2::aes(x = div, y = common_name)) +
+  ggplot2::geom_line(ggplot2::aes(group = pair)) +
+  ggplot2::geom_point(ggplot2::aes(color = type), size = 3) +
+  ggplot2::geom_text(data = hypc_pred, ggplot2::aes(x = div - 30, label = ifelse(div < 10, sprintf("%.1f", round(div, digits = 1)), round(div, digits = 0))), colour = "#CC79A7") +
+  ggplot2::geom_text(data = hypc_hum, ggplot2::aes(x = div + 30, label = ifelse(div < 10, sprintf("%.1f", round(div, digits = 1)), round(div, digits = 0))), colour = "#0072B2") +  
   rphylopic::add_phylopic(bubo, alpha = 1, y = 14, x = dplyr::filter(hypc_dumb, type == "pred" & common_name == "Eurasian Eagle-owl")$vol.x + dis, ysize = sil * owl) +
   rphylopic::add_phylopic(tyto, alpha = 1, y = 13, x = dplyr::filter(hypc_dumb, type == "pred" & common_name == "Barn Owl")$vol.x + dis, ysize = sil * owl) +
   rphylopic::add_phylopic(asio, alpha = 1, y = 12, x = dplyr::filter(hypc_dumb, type == "pred" & common_name == "Long-eared Owl")$vol.x + dis, ysize = sil * owl) +
@@ -1680,34 +1454,37 @@ hypc_dumb_plot <- ggplot(data = hypc_dumb, aes(x = div, y = common_name)) +
   rphylopic::add_phylopic(pardus, alpha = 1, y = 10, x = dplyr::filter(hypc_dumb, type == "pred" & common_name == "Leopard")$vol.x + dis, ysize = sil) +
   rphylopic::add_phylopic(canis, alpha = 1, y = 9, x = dplyr::filter(hypc_dumb, type == "pred" & common_name == "Gray Wolf")$vol.x + dis, ysize = sil) +
   rphylopic::add_phylopic(puma, alpha = 1, y = 8, x = dplyr::filter(hypc_dumb, type == "pred" & common_name == "Puma")$vol.x + dis, ysize = sil * fish) +
-  annotation_custom(grid::rasterGrob(cuon), xmin = -90, xmax = -50, ymin = 6.6, ymax = 7.4) +
+  ggplot2::annotation_custom(grid::rasterGrob(cuon), xmin = -90, xmax = -50, ymin = 6.6, ymax = 7.4) +
   rphylopic::add_phylopic(leo, alpha = 1, y = 6, x = dplyr::filter(hypc_dumb, type == "pred" & common_name == "Lion")$vol.x + dis, ysize = sil * fish) +
   rphylopic::add_phylopic(tigris, alpha = 1, y = 5, x = dplyr::filter(hypc_dumb, type == "pred" & common_name == "Tiger")$vol.x + dis, ysize = sil * fish) +
-  annotation_custom(grid::rasterGrob(jaguar), xmin = -105, xmax = -45, ymin = 3.5, ymax = 4.5) +
+  ggplot2::annotation_custom(grid::rasterGrob(jaguar), xmin = -105, xmax = -45, ymin = 3.5, ymax = 4.5) +
   rphylopic::add_phylopic(crocuta, alpha = 1, y = 3, x = dplyr::filter(hypc_dumb, type == "pred" & common_name == "Spotted Hyena")$vol.x + dis, ysize = sil) +
   rphylopic::add_phylopic(cheetah, alpha = 1, y = 2, x = dplyr::filter(hypc_dumb, type == "pred" & common_name == "Cheetah")$vol.x + dis, ysize = sil * fish) +
   rphylopic::add_phylopic(lycaon, alpha = 1, y = 1, x = dplyr::filter(hypc_dumb, type == "pred" & common_name == "African Wild Dog")$vol.x + dis, ysize = sil) +
-  labs(x = bquote("Prey volume "~(SD^5)), colour = "") +
-  scale_colour_manual(values = c("#CC79A7", "#0072B2"), labels = c("Predator", "Humans - all uses")) +
-  scale_x_continuous(breaks = c(0, 200, 400, 600, 800), limits = c(-80, 820)) +
-  theme(axis.title.y = element_blank(),
-        legend.position = c(0.8, 0.5))
+  ggplot2::labs(x = bquote("Prey volume "~(SD^5)), colour = "") +
+  ggplot2::scale_colour_manual(values = c("#CC79A7", "#0072B2"), labels = c("Predator", "Humans - all uses")) +
+  ggplot2::scale_x_continuous(breaks = c(0, 200, 400, 600, 800), limits = c(-80, 820)) +
+  ggplot2::theme(axis.title.y = ggplot2::element_blank(),
+                 legend.position = c(0.8, 0.5))
 
-# combine Fig 4 - with comparator
+```
+
+### Figure 4 combined
+
+Here we combine the panels
+
+```{r}
 
 fig4_cmp <- cowplot::plot_grid(pca_used, NULL, cowplot::plot_grid(NULL, vol_plot, NULL, NULL, uni_plot, labels = c("B", "", "", "C", ""), nrow = 5, rel_heights = c(0.04, 1, 0.04, 0.04, 1)), ncol = 3, rel_widths = c(1, 0.1, 1), labels = c("A", "", "")) %>% 
   cowplot::plot_grid(., cowplot::plot_grid(NULL, cowplot::plot_grid(NULL, hypc_dumb_plot, nrow = 2, rel_heights = c(0.04, 1)), NULL, ncol = 3, rel_widths = c(0.04, 1, 0.04)), nrow = 2, labels = c("", "D"))
 
-# cowplot::save_plot("outputs/fig4_glob_cmp3_600.png", fig4_cmp, base_width = 12, base_height = 12, dpi = 600)
+# cowplot::save_plot("figs/fig4_traits.png", fig4_cmp, base_width = 12, base_height = 12, dpi = 600)
 
-# fig4_cmp_diff <- cowplot::plot_grid(pca_used, NULL, cowplot::plot_grid(NULL, vol_diff_plot, NULL, NULL, uni_diff_plot, labels = c("B", "", "", "C", ""), nrow = 5, rel_heights = c(0.04, 1, 0.04, 0.04, 1)), ncol = 3, rel_widths = c(1, 0.1, 1), labels = c("A", "", "")) %>% 
-#   cowplot::plot_grid(., cowplot::plot_grid(NULL, cowplot::plot_grid(NULL, hypc_dumb_plot, nrow = 2, rel_heights = c(0.04, 1)), NULL, ncol = 3, rel_widths = c(0.04, 1, 0.04)), nrow = 2, labels = c("", "D"))
-# 
-# # cowplot::save_plot("outputs/fig4_glob_cmp_diff.png", fig4_cmp_diff, base_width = 12, base_height = 12, dpi = 300)
+fig4_cmp
 
 ```
 
-## Individual trait distributions
+### Individual trait distributions - Figure ED1
 
 ```{r}
 
@@ -1720,6 +1497,7 @@ trc_prep_all <- lapply(1:length(trc), function(x) {
 }) %>%
   dplyr::bind_rows()
 
+# function to calculate density distributions
 dens_function <- function(trc_prep, name) {
   
   trc_dens <- trc_prep %>% 
@@ -1752,10 +1530,6 @@ dens_function <- function(trc_prep, name) {
   
 }
 
-bon <- 0.05/15
-
-#mean_size <- 100
-
 ## body mass
 
 tri <- dens_function(trc_prep = dplyr::rename(trc_prep_all, trait = cooke2019body_mass_median), name = "Body mass*")
@@ -1779,23 +1553,21 @@ eff <- tri$data %>%
 
 eff_txt <- paste0(format(signif(eff$eff, 2), nsmall = 2), " [", format(signif(eff$eff_low, 2), nsmall = 2), ", ", format(signif(eff$eff_upp, 2), nsmall = 2), "]")
 
-tri_plot_bm <- ggplot(tri$dens, aes(trait, qmean, group = used)) +
+tri_plot_bm <- ggplot2::ggplot(tri$dens, ggplot2::aes(trait, qmean, group = used)) +
   # ribbon of uncertainty across trait imputation datasets
-  geom_ribbon(aes(ymin = qymin, ymax = qymax, fill = used)) +
+  ggplot2::geom_ribbon(ggplot2::aes(ymin = qymin, ymax = qymax, fill = used)) +
   # line of mean across datasets
-  geom_line(aes(colour = used), lwd = 1) +
-  # # means uncertainty
-  # geom_rect(data = tri$mean, aes(xmin = mean_min, xmax = mean_max, ymin = 0, ymax = (1.05 * (max(tri$dens$qymax))), fill = used), inherit.aes = FALSE, show.legend = FALSE) +
+  ggplot2::geom_line(ggplot2::aes(colour = used), lwd = 1) +
   # means
-  geom_vline(data = tri$mean, aes(xintercept = mean, colour = used), size = 1.2, linetype = "dashed", show.legend = FALSE) +
-  annotate("text", x = 4, y = 0.6, label = eff_txt, size = 4) +
-  scale_color_manual(values = c("grey", "#fd8d3c")) +
-  scale_fill_manual(values = c("lightgrey", "#fdbe85")) +
-  scale_x_continuous(expand = c(0,0)) +
-  scale_y_continuous(expand = c(0,0), limits = c(0, (1.05 * (max(tri$dens$qymax))))) +
-  labs(x = expression(log[10](Body~mass)), y = "Density") +
-  facet_wrap(~ title) +
-  theme(legend.title = element_blank())
+  ggplot2::geom_vline(data = tri$mean, ggplot2::aes(xintercept = mean, colour = used), size = 1.2, linetype = "dashed", show.legend = FALSE) +
+  ggplot2::annotate("text", x = 4, y = 0.6, label = eff_txt, size = 4) +
+  ggplot2::scale_color_manual(values = c("grey", "#fd8d3c")) +
+  ggplot2::scale_fill_manual(values = c("lightgrey", "#fdbe85")) +
+  ggplot2::scale_x_continuous(expand = c(0,0)) +
+  ggplot2::scale_y_continuous(expand = c(0,0), limits = c(0, (1.05 * (max(tri$dens$qymax))))) +
+  ggplot2::labs(x = expression(log[10](Body~mass)), y = "Density") +
+  ggplot2::facet_wrap(~ title) +
+  ggplot2::theme(legend.title = ggplot2::element_blank())
 
 ## litter size
 
@@ -1820,23 +1592,21 @@ eff <- tri$data %>%
 
 eff_txt <- paste0(format(signif(eff$eff, 1), nsmall = 2), " [", format(signif(eff$eff_low, 1), nsmall = 2), ", ", format(signif(eff$eff_upp, 1), nsmall = 2), "]")
 
-tri_plot_ls <- ggplot(tri$dens, aes(trait, qmean, group = used)) +
+tri_plot_ls <- ggplot2::ggplot(tri$dens, ggplot2::aes(trait, qmean, group = used)) +
   # ribbon of uncertainty across trait imputation datasets
-  geom_ribbon(aes(ymin = qymin, ymax = qymax, fill = used)) +
+  ggplot2::geom_ribbon(ggplot2::aes(ymin = qymin, ymax = qymax, fill = used)) +
   # line of mean across datasets
-  geom_line(aes(colour = used), lwd = 1) +
-  # # means uncertainty
-  # geom_rect(data = tri$mean, aes(xmin = mean_min, xmax = mean_max, ymin = 0, ymax = (1.05 * (max(tri$dens$qymax))), fill = used), inherit.aes = FALSE, show.legend = FALSE) +
+  ggplot2::geom_line(ggplot2::aes(colour = used), lwd = 1) +
   # means
-  geom_vline(data = tri$mean, aes(xintercept = mean, colour = used), size = 1.2, linetype = "dashed", show.legend = FALSE) +
-  annotate("text", x = 3.6, y = 0.8, label = eff_txt, size = 4) +
-  scale_color_manual(values = c("grey", "#fd8d3c")) +
-  scale_fill_manual(values = c("lightgrey", "#fdbe85")) +
-  scale_x_continuous(expand = c(0,0)) +
-  scale_y_continuous(expand = c(0,0), limits = c(0, (1.05 * (max(tri$dens$qymax))))) +
-  labs(x = expression(sqrt(Litter/clutch~size)), y = "Density") +
-  facet_wrap(~ title) +
-  theme(legend.title = element_blank())
+  ggplot2::geom_vline(data = tri$mean, ggplot2::aes(xintercept = mean, colour = used), size = 1.2, linetype = "dashed", show.legend = FALSE) +
+  ggplot2::annotate("text", x = 3.6, y = 0.8, label = eff_txt, size = 4) +
+  ggplot2::scale_color_manual(values = c("grey", "#fd8d3c")) +
+  ggplot2::scale_fill_manual(values = c("lightgrey", "#fdbe85")) +
+  ggplot2::scale_x_continuous(expand = c(0,0)) +
+  ggplot2::scale_y_continuous(expand = c(0,0), limits = c(0, (1.05 * (max(tri$dens$qymax))))) +
+  ggplot2::labs(x = expression(sqrt(Litter/clutch~size)), y = "Density") +
+  ggplot2::facet_wrap(~ title) +
+  ggplot2::theme(legend.title = ggplot2::element_blank())
 
 ## habitat breadth
 
@@ -1861,23 +1631,21 @@ eff <- tri$data %>%
 
 eff_txt <- paste0(format(signif(eff$eff, 2), nsmall = 2), " [", format(signif(eff$eff_low, 2), nsmall = 2), ", ", format(signif(eff$eff_upp, 2), nsmall = 2), "]")
 
-tri_plot_hb <- ggplot(tri$dens, aes(trait, qmean, group = used)) +
+tri_plot_hb <- ggplot2::ggplot(tri$dens, ggplot2::aes(trait, qmean, group = used)) +
   # ribbon of uncertainty across trait imputation datasets
-  geom_ribbon(aes(ymin = qymin, ymax = qymax, fill = used)) +
+  ggplot2::geom_ribbon(ggplot2::aes(ymin = qymin, ymax = qymax, fill = used)) +
   # line of mean across datasets
-  geom_line(aes(colour = used), lwd = 1) +
-  # # means uncertainty
-  # geom_rect(data = tri$mean, aes(xmin = mean_min, xmax = mean_max, ymin = 0, ymax = (1.05 * (max(tri$dens$qymax))), fill = used), inherit.aes = FALSE, show.legend = FALSE) +
+  ggplot2::geom_line(ggplot2::aes(colour = used), lwd = 1) +
   # means
-  geom_vline(data = tri$mean, aes(xintercept = mean, colour = used), size = 1.2, linetype = "dashed", show.legend = FALSE) +
-  annotate("text", x = 3.6, y = 1, label = eff_txt, size = 4) +
-  scale_color_manual(values = c("grey", "#fd8d3c")) +
-  scale_fill_manual(values = c("lightgrey", "#fdbe85")) +
-  scale_x_continuous(expand = c(0,0)) +
-  scale_y_continuous(expand = c(0,0), limits = c(0, (1.05 * (max(tri$dens$qymax))))) +
-  labs(x = expression(sqrt(Habitat~breadth)), y = "Density") +
-  facet_wrap(~ title) +
-  theme(legend.title = element_blank())
+  ggplot2::geom_vline(data = tri$mean, ggplot2::aes(xintercept = mean, colour = used), size = 1.2, linetype = "dashed", show.legend = FALSE) +
+  ggplot2::annotate("text", x = 3.6, y = 1, label = eff_txt, size = 4) +
+  ggplot2::scale_color_manual(values = c("grey", "#fd8d3c")) +
+  ggplot2::scale_fill_manual(values = c("lightgrey", "#fdbe85")) +
+  ggplot2::scale_x_continuous(expand = c(0,0)) +
+  ggplot2::scale_y_continuous(expand = c(0,0), limits = c(0, (1.05 * (max(tri$dens$qymax))))) +
+  ggplot2::labs(x = expression(sqrt(Habitat~breadth)), y = "Density") +
+  ggplot2::facet_wrap(~ title) +
+  ggplot2::theme(legend.title = ggplot2::element_blank())
 
 ## generation length
 
@@ -1902,23 +1670,21 @@ eff <- tri$data %>%
 
 eff_txt <- paste0(format(signif(eff$eff, 2), nsmall = 2), " [", format(signif(eff$eff_low, 2), nsmall = 2), ", ", format(signif(eff$eff_upp, 2), nsmall = 2), "]")
 
-tri_plot_gl <- ggplot(tri$dens, aes(trait, qmean, group = used)) +
+tri_plot_gl <- ggplot2::ggplot(tri$dens, ggplot2::aes(trait, qmean, group = used)) +
   # ribbon of uncertainty across trait imputation datasets
-  geom_ribbon(aes(ymin = qymin, ymax = qymax, fill = used)) +
+  ggplot2::geom_ribbon(ggplot2::aes(ymin = qymin, ymax = qymax, fill = used)) +
   # line of mean across datasets
-  geom_line(aes(colour = used), lwd = 1) +
-  # # means uncertainty
-  # geom_rect(data = tri$mean, aes(xmin = mean_min, xmax = mean_max, ymin = 0, ymax = (1.05 * (max(tri$dens$qymax))), fill = used), inherit.aes = FALSE, show.legend = FALSE) +
+  ggplot2::geom_line(ggplot2::aes(colour = used), lwd = 1) +
   # means
-  geom_vline(data = tri$mean, aes(xintercept = mean, colour = used), size = 1.2, linetype = "dashed", show.legend = FALSE) +
-  annotate("text", x = 1.05, y = 2, label = eff_txt, size = 4) +
-  scale_color_manual(values = c("grey", "#fd8d3c")) +
-  scale_fill_manual(values = c("lightgrey", "#fdbe85")) +
-  scale_x_continuous(expand = c(0,0)) +
-  scale_y_continuous(expand = c(0,0), limits = c(0, (1.05 * (max(tri$dens$qymax))))) +
-  labs(x = expression(log[10](Generation~length)), y = "Density") +
-  facet_wrap(~ title) +
-  theme(legend.title = element_blank())
+  ggplot2::geom_vline(data = tri$mean, ggplot2::aes(xintercept = mean, colour = used), size = 1.2, linetype = "dashed", show.legend = FALSE) +
+  ggplot2::annotate("text", x = 1.05, y = 2, label = eff_txt, size = 4) +
+  ggplot2::scale_color_manual(values = c("grey", "#fd8d3c")) +
+  ggplot2::scale_fill_manual(values = c("lightgrey", "#fdbe85")) +
+  ggplot2::scale_x_continuous(expand = c(0,0)) +
+  ggplot2::scale_y_continuous(expand = c(0,0), limits = c(0, (1.05 * (max(tri$dens$qymax))))) +
+  ggplot2::labs(x = expression(log[10](Generation~length)), y = "Density") +
+  ggplot2::facet_wrap(~ title) +
+  ggplot2::theme(legend.title = ggplot2::element_blank())
 
 ## diet
 
@@ -1943,28 +1709,33 @@ eff <- tri$data %>%
 
 eff_txt <- paste0(format(signif(eff$eff, 2), nsmall = 2), " [", format(signif(eff$eff_low, 2), nsmall = 2), ", ", format(signif(eff$eff_upp, 2), nsmall = 2), "]")
 
-tri_plot_diet <- ggplot(tri$dens, aes(trait, qmean, group = used)) +
+tri_plot_diet <- ggplot2::ggplot(tri$dens, ggplot2::aes(trait, qmean, group = used)) +
   # ribbon of uncertainty across trait imputation datasets
-  geom_ribbon(aes(ymin = qymin, ymax = qymax, fill = used)) +
+  ggplot2::geom_ribbon(ggplot2::aes(ymin = qymin, ymax = qymax, fill = used)) +
   # line of mean across datasets
-  geom_line(aes(colour = used), lwd = 1) +
-  # # means uncertainty
-  # geom_rect(data = tri$mean, aes(xmin = mean_min, xmax = mean_max, ymin = 0, ymax = (1.05 * (max(tri$dens$qymax))), fill = used), inherit.aes = FALSE, show.legend = FALSE) +
+  ggplot2::geom_line(ggplot2::aes(colour = used), lwd = 1) +
   # means
-  geom_vline(data = tri$mean, aes(xintercept = mean, colour = used), size = 1.2, linetype = "dashed", show.legend = FALSE) +
-  annotate("text", x = -0.1, y = 7.5, label = eff_txt, size = 4) +
-  scale_color_manual(values = c("grey", "#fd8d3c")) +
-  scale_fill_manual(values = c("lightgrey", "#fdbe85")) +
-  scale_x_continuous(expand = c(0,0)) +
-  scale_y_continuous(expand = c(0,0), limits = c(0, (1.05 * (max(tri$dens$qymax))))) +
-  labs(x = "Diet", y = "Density") +
-  facet_wrap(~ title) +
-  theme(legend.title = element_blank())
+  ggplot2::geom_vline(data = tri$mean, ggplot2::aes(xintercept = mean, colour = used), size = 1.2, linetype = "dashed", show.legend = FALSE) +
+  ggplot2::annotate("text", x = -0.1, y = 7.5, label = eff_txt, size = 4) +
+  ggplot2::scale_color_manual(values = c("grey", "#fd8d3c")) +
+  ggplot2::scale_fill_manual(values = c("lightgrey", "#fdbe85")) +
+  ggplot2::scale_x_continuous(expand = c(0,0)) +
+  ggplot2::scale_y_continuous(expand = c(0,0), limits = c(0, (1.05 * (max(tri$dens$qymax))))) +
+  ggplot2::labs(x = "Diet", y = "Density") +
+  ggplot2::facet_wrap(~ title) +
+  ggplot2::theme(legend.title = ggplot2::element_blank())
 
 # combine plots
-tri_plot_comb <- cowplot::plot_grid(tri_plot_bm + theme(legend.position = "none"), tri_plot_gl + theme(legend.position = "none"), tri_plot_diet + theme(legend.position = "none"), tri_plot_hb + theme(legend.position = "none"), tri_plot_ls + theme(legend.position = "none"), cowplot::get_legend(tri_plot_bm))
+tri_plot_comb <- cowplot::plot_grid(tri_plot_bm + ggplot2::theme(legend.position = "none"), 
+                                    tri_plot_gl + ggplot2::theme(legend.position = "none"), 
+                                    tri_plot_diet + ggplot2::theme(legend.position = "none"), 
+                                    tri_plot_hb + ggplot2::theme(legend.position = "none"), 
+                                    tri_plot_ls + ggplot2::theme(legend.position = "none"), 
+                                    cowplot::get_legend(tri_plot_bm))
 
-# cowplot::save_plot("outputs/traits_ind_eff.png", tri_plot_comb, base_height = 6, base_width = 12)
+# cowplot::save_plot("figs/fig_ED1_traits_eff.png", tri_plot_comb, base_height = 6, base_width = 12)
+
+tri_plot_comb
 
 ```
 
