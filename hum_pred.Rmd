@@ -1260,13 +1260,13 @@ test_vol <- rn_vol %>%
 
 # dataframe of volumes for each group (comparison)
 rang_vol <- data.frame(obs_rnd = rep(c("obs_vol", "rnd_vol"), 2), 
-                       vol = c(mean(rn_used$obs_vol), median(rn_used$rnd_vol), median(rn_thrt$obs_vol), mean(rn_thrt$rnd_vol)), 
+                       vol = c(mean(rn_used$obs_vol), median(rn_used$rnd_vol), mean(rn_thrt$obs_vol), median(rn_thrt$rnd_vol)), 
                        ymin = c(quantile(rn_used$obs_vol, 0.025), quantile(rn_used$rnd_vol, 0.025), quantile(rn_thrt$obs_vol, 0.025), quantile(rn_thrt$rnd_vol, 0.025)), 
                        ymax = c(quantile(rn_used$obs_vol, 0.975), quantile(rn_used$rnd_vol, 0.975), quantile(rn_thrt$obs_vol, 0.975), quantile(rn_thrt$rnd_vol, 0.975)), 
                        grp = rep(c("Used", "Extinction risk & use\nconsidered threat"), each = 2)) %>% 
     dplyr::mutate(grp = factor(grp, levels = c("Used", "Extinction risk & use\nconsidered threat")))
 
-lin_vol <- data.frame(yintercept = c(mean(rn_used$rnd_vol), mean(rn_thrt$rnd_vol)), grp = factor(c("Used", "Extinction risk & use\nconsidered threat"), levels = c("Used", "Extinction risk & use\nconsidered threat")))
+lin_vol <- data.frame(yintercept = c(median(rn_used$rnd_vol), median(rn_thrt$rnd_vol)), grp = factor(c("Used", "Extinction risk & use\nconsidered threat"), levels = c("Used", "Extinction risk & use\nconsidered threat")))
 
 #### Fig 4B
 
@@ -1741,7 +1741,7 @@ tri_plot_comb <- cowplot::plot_grid(tri_plot_bm + ggplot2::theme(legend.position
                                     tri_plot_ls + ggplot2::theme(legend.position = "none"), 
                                     cowplot::get_legend(tri_plot_bm))
 
-# cowplot::save_plot("figs/fig_ED1_traits_eff.png", tri_plot_comb, base_height = 6, base_width = 12)
+# cowplot::save_plot("figs/supp_fig1_traits_eff.png", tri_plot_comb, base_height = 6, base_width = 12)
 
 tri_plot_comb
 

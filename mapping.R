@@ -55,7 +55,7 @@ residplot = ggplot2::ggplot(data = mod_resid, ggplot2::aes(x = allspecies, y = r
 fitresidplot <- cowplot::plot_grid(fitplot, residplot, labels = "AUTO")
 
 # save plot
-cowplot::save_plot("figs/fig_5_model.png", fitresidplot, base_height = 4, base_width = 6)
+cowplot::save_plot("figs/fig5_model.png", fitresidplot, base_height = 4, base_width = 6)
 
 # MAPPING
 # add residuals to sp_n for mapping
@@ -167,5 +167,5 @@ p4 = tmap::tm_shape(dat4plot) +
 p_comb <- tmap::tmap_arrange(p1, p2, p3, p4, ncol = 1)
 
 # save plot
-tmap::tmap_save(p_comb, "figs/fig_3_maps.png", width = 5.5, height = 8)
+tmap::tmap_save(p_comb, "figs/fig3_maps.png", width = 5.5, height = 8)
 
