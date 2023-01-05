@@ -8,7 +8,7 @@ See `hum_pred.Rmd` chunks 3-7
 See `hum_pred.Rmd` chunks 8-11
 
 ## Mapping analyses (Figures 3 and 5):
-Mathieu's code
+See `mapping.R`
 
 ## Trait analyses (Figure 4)
 See `hum_pred.Rmd` chunks 12-18
