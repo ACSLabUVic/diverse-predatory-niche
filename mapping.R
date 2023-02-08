@@ -168,5 +168,5 @@ p4 = tmap::tm_shape(dat4plot) +
 p_comb <- tmap::tmap_arrange(p1, p2, p3, p4, ncol = 1)
 
 # save plot
-tmap::tmap_save(p_comb, "figs/fig3_maps.pdf", width = 5.5, height = 8, dpi = 600)
+tmap::tmap_save(p_comb, "figs/fig3_maps.tiff", width = 5.5, height = 8)
 
