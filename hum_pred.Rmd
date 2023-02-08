@@ -422,7 +422,7 @@ Here we combine the panels, a, b, c into Figure 1
 fig1_log <- cowplot::plot_grid(
   cowplot::plot_grid(stack_plot, stack_threat_plot, ncol = 2, labels = "auto"),
   NULL,
-  cowplot::plot_grid(NULL, NULL, dumb_log_plot, NULL, rel_widths = c(0.13, 0.02, 1, 0.15), nrow = 1, labels = c("", "C", "", "")),
+  cowplot::plot_grid(NULL, NULL, dumb_log_plot, NULL, rel_widths = c(0.13, 0.02, 1, 0.15), nrow = 1, labels = c("", "c", "", "")),
   nrow = 3,
   rel_heights = c(1, 0.1, 2))
 
@@ -556,6 +556,16 @@ plot_title_eu <- function(name, style = "bold.italic", x = 0.2) {
   
 }
 
+# realms
+realms <- c("Terrestrial", "Freshwater", "Marine")
+
+# colours for categories of use
+pets <- "#56B4E9"
+food <- "#E69F00"
+collect <- "#CC79A7"
+medi <- "#009E73"
+clothes <-"#D55E00"
+
 ```
 
 ### Euler for uses across realms
@@ -633,13 +643,6 @@ classes <- unique(use_raw$class_name)
 top_class <- lapply(classes, use_class)
 # food, pets, collection, medicine, clothes
 
-# fill colours
-pets <- "#56B4E9"
-food <- "#E69F00"
-collect <- "#CC79A7"
-medi <- "#009E73"
-clothes <-"#D55E00"
-
 # titles for each class
 title_act <- plot_title_eu(name = "Ray-finned fishes (n = 6,532)")
 title_amph <- plot_title_eu(name = "Amphibians (n = 592)")
@@ -689,9 +692,9 @@ Combine realm and class euler plots
 
 ```{r}
 
-fig2_com <- cowplot::plot_grid(eu_realms, eu_tax, nrow = 2, labels = "AUTO", rel_heights = c(1, 2))
+fig2_com <- cowplot::plot_grid(eu_realms, eu_tax, nrow = 2, labels = "auto", rel_heights = c(1, 2))
 
-# cowplot::save_plot("figs/fig2_eulers.png", fig2_com, base_height = 10, base_width = 12, dpi = 600)
+cowplot::save_plot("figs/fig2_eulers.pdf", fig2_com, base_height = 10, base_width = 12, dpi = 600)
 
 fig2_com
 
@@ -1269,7 +1272,7 @@ rang_vol <- data.frame(obs_rnd = rep(c("obs_vol", "rnd_vol"), 2),
 
 lin_vol <- data.frame(yintercept = c(median(rn_used$rnd_vol), median(rn_thrt$rnd_vol)), grp = factor(c("Used", "Extinction risk & use\nconsidered threat"), levels = c("Used", "Extinction risk & use\nconsidered threat")))
 
-#### Fig 4B
+#### Fig 4b
 
 # plot of volume comparisons
 vol_plot <- ggplot2::ggplot(data = rn_vol, ggplot2::aes(x = obs_rnd, y = vol)) +
@@ -1319,7 +1322,7 @@ rang_uni <- data.frame(obs_rnd = rep(c("frac_unique_1", "frac_unique_2"), 2),
 lin_uni <- data.frame(yintercept = c(mean(rn_used$frac_unique_2), mean(rn_thrt$frac_unique_2)), grp = factor(c("Used", "Extinction risk & use\nconsidered threat"), levels = c("Used", "Extinction risk & use\nconsidered threat"))) %>% 
   dplyr::mutate(yintercept = yintercept * 100)
 
-#### Fig 4C
+#### Fig 4c
 
 # plot of unique fractions comparisons
 uni_plot <- ggplot2::ggplot(data = rn_uni, ggplot2::aes(x = obs_rnd, y = uni)) +
@@ -1448,7 +1451,7 @@ fish <- 0.8
 owl <- 1.1
 dis <- -80
 
-## Figure 4D
+## Figure 4d
 
 # dumbbell plot
 hypc_dumb_plot <- ggplot2::ggplot(data = hypc_dumb, ggplot2::aes(x = div, y = common_name)) +
@@ -1484,10 +1487,10 @@ Here we combine the panels
 
 ```{r}
 
-fig4_cmp <- cowplot::plot_grid(pca_used, NULL, cowplot::plot_grid(NULL, vol_plot, NULL, NULL, uni_plot, labels = c("B", "", "", "C", ""), nrow = 5, rel_heights = c(0.04, 1, 0.04, 0.04, 1)), ncol = 3, rel_widths = c(1, 0.1, 1), labels = c("A", "", "")) %>% 
-  cowplot::plot_grid(., cowplot::plot_grid(NULL, cowplot::plot_grid(NULL, hypc_dumb_plot, nrow = 2, rel_heights = c(0.04, 1)), NULL, ncol = 3, rel_widths = c(0.04, 1, 0.04)), nrow = 2, labels = c("", "D"))
+fig4_cmp <- cowplot::plot_grid(pca_used, NULL, cowplot::plot_grid(NULL, vol_plot, NULL, NULL, uni_plot, labels = c("b", "", "", "c", ""), nrow = 5, rel_heights = c(0.04, 1, 0.04, 0.04, 1)), ncol = 3, rel_widths = c(1, 0.1, 1), labels = c("a", "", "")) %>% 
+  cowplot::plot_grid(., cowplot::plot_grid(NULL, cowplot::plot_grid(NULL, hypc_dumb_plot, nrow = 2, rel_heights = c(0.04, 1)), NULL, ncol = 3, rel_widths = c(0.04, 1, 0.04)), nrow = 2, labels = c("", "d"))
 
-# cowplot::save_plot("figs/fig4_traits.png", fig4_cmp, base_width = 12, base_height = 12, dpi = 600)
+cowplot::save_plot("figs/fig4_traits.pdf", fig4_cmp, base_width = 12, base_height = 12, dpi = 600)
 
 fig4_cmp
 
@@ -1742,7 +1745,7 @@ tri_plot_comb <- cowplot::plot_grid(tri_plot_bm + ggplot2::theme(legend.position
                                     tri_plot_ls + ggplot2::theme(legend.position = "none"), 
                                     cowplot::get_legend(tri_plot_bm))
 
-# cowplot::save_plot("figs/supp_fig1_traits_eff.png", tri_plot_comb, base_height = 6, base_width = 12)
+cowplot::save_plot("figs/supp_fig1_traits_eff.pdf", tri_plot_comb, base_height = 6, base_width = 12, dpi = 600)
 
 tri_plot_comb
 
