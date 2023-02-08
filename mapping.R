@@ -15,6 +15,7 @@ library(tools)
 library(MASS)
 library(lwgeom)
 library(viridis)
+library(cowplot)
 
 # animal use data (usedata.csv) with counts and proportions derived from IUCN
 # and BirdLife International data
@@ -34,7 +35,7 @@ sp_n = readr::read_csv('data/raw/usedata.csv')
 # negative binomial generalized linear model, species used ~ log(available species)
 mod_used = MASS::glm.nb(used ~ log(allspecies), data = sp_n, link = 'log')
 
-# Figure 5A - model fit
+# Figure 5a - model fit
 mod_pred = data.frame(allspecies = sp_n$allspecies, used = predict(mod_used, type = 'link'))
 
 fitplot = ggplot2::ggplot(data = sp_n, ggplot2::aes(x = log(allspecies), y = log(used + 0.01)), size = 0.5) +
@@ -43,7 +44,7 @@ fitplot = ggplot2::ggplot(data = sp_n, ggplot2::aes(x = log(allspecies), y = log
   ggplot2::labs(y = 'log(Used)', x = 'log(Available)') +
   ggplot2::theme_classic()
 
-# Figure 5B - model residuals
+# Figure 5b - model residuals
 mod_resid = data.frame(allspecies = sp_n$allspecies, residuals = residuals(mod_used))
 
 residplot = ggplot2::ggplot(data = mod_resid, ggplot2::aes(x = allspecies, y = residuals)) + 
@@ -52,10 +53,10 @@ residplot = ggplot2::ggplot(data = mod_resid, ggplot2::aes(x = allspecies, y = r
   ggplot2::theme_classic()
 
 # combine plots
-fitresidplot <- cowplot::plot_grid(fitplot, residplot, labels = "AUTO")
+fitresidplot <- cowplot::plot_grid(fitplot, residplot, labels = "auto")
 
 # save plot
-cowplot::save_plot("figs/fig5_model.png", fitresidplot, base_height = 4, base_width = 6)
+cowplot::save_plot("figs/fig5_model.pdf", fitresidplot, base_height = 4, base_width = 6, dpi = 600)
 
 # MAPPING
 # add residuals to sp_n for mapping
@@ -92,7 +93,7 @@ dat4plot = sf::st_make_valid(dat4plot)
 countries = lwgeom::st_transform_proj(countries, crs = "+proj=wintri")
 countries = sf::st_make_valid(countries)
 
-# Figure 3A - Species Used (Count)
+# Figure 3a - Species Used (Count)
 p1 = tmap::tm_shape(dat4plot) +
   tmap::tm_borders(alpha = 0) +
   tmap::tm_fill('used', palette =  "magma", style = "cont", title = '',
@@ -110,7 +111,7 @@ p1 = tmap::tm_shape(dat4plot) +
                   frame = FALSE, 
                   frame.lwd = NA)
 
-# Figure 3B - Species Used (Residuals)
+# Figure 3b - Species Used (Residuals)
 p2 = tmap::tm_shape(dat4plot) +
   tmap::tm_borders(alpha = 0) +
   tmap::tm_fill('residuals', palette =  "magma", midpoint = NA, style = "cont", title = '',
@@ -127,7 +128,7 @@ p2 = tmap::tm_shape(dat4plot) +
                   frame = FALSE, 
                   frame.lwd = NA)
 
-# Figure 3C - Food (% Species Used)
+# Figure 3c - Food (% Species Used)
 p3 = tmap::tm_shape(dat4plot) +
   tmap::tm_borders(alpha = 0) +
   tmap::tm_fill('food_percent', palette =  "magma", style = "cont", title = '',
@@ -145,7 +146,7 @@ p3 = tmap::tm_shape(dat4plot) +
                   frame = FALSE, 
                   frame.lwd = NA)
 
-# Figure 3D - Pets (% Species Used)
+# Figure 3d - Pets (% Species Used)
 p4 = tmap::tm_shape(dat4plot) +
   tmap::tm_borders(alpha = 0) +
   tmap::tm_fill('pets_percent', palette =  "magma", style = "cont", title = '',
@@ -167,5 +168,5 @@ p4 = tmap::tm_shape(dat4plot) +
 p_comb <- tmap::tmap_arrange(p1, p2, p3, p4, ncol = 1)
 
 # save plot
-tmap::tmap_save(p_comb, "figs/fig3_maps.png", width = 5.5, height = 8)
+tmap::tmap_save(p_comb, "figs/fig3_maps.pdf", width = 5.5, height = 8, dpi = 600)
 
