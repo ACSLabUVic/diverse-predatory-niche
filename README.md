@@ -1,5 +1,5 @@
 # diverse-predatory-niche
-This repository contains the required R code and data files to reproduce the analyses and plots in: 'Humanity’s diverse predatory niche' Chris T. Darimont and Rob Cooke, Mathieu L. Bourbonnais, Heather M. Bryan, Stephanie M. Carlson, James A. Estes, Mauro Galetti, Taal Levi, Jessica L. Maclean, Iain McKechnie, Paul C. Paquet, Boris Worm.
+This repository contains the required R code and data files to reproduce the analyses and plots in: 'Humanity’s diverse predatory niche' Chris T. Darimont and Rob Cooke, Mathieu L. Bourbonnais, Heather M. Bryan, Stephanie M. Carlson, James A. Estes, Mauro Galetti, Taal Levi, Jessica L. Maclean, Iain McKechnie, Paul C. Paquet, Boris Worm. Communications Biology.
 
 ## Use analyses (Figure 1):  
 See `hum_pred.Rmd` chunks 3-7

@@ -18,8 +18,8 @@ knitr::opts_chunk$set(echo = TRUE)
 # see renv for packages and their dependencies
 
 library(dplyr) # load for pipe %>% 
-
 library(ade4) # load for pcoa summary
+library(cowplot) # load cowplot for plotting
 
 # # missForest doesn't install without randomForest package
 # # see here for help https://stackoverflow.com/questions/62541885/package-randomforest-is-not-available-for-r-version-4-0-2
@@ -242,7 +242,7 @@ verts_threat_stack <- dplyr::left_join(verts_used, verts_thruse, by = "class_nam
 
 ### Stacked barplots
 
-Here we create the plots for figure 1A and 1B
+Here we create the plots for figure 1a and 1b
 
 ```{r}
 
@@ -251,7 +251,7 @@ alp <- 1
 ysi <- 1600
 nud <- 1600
 
-# stack plot for use - fig 1A
+# stack plot for use - fig 1a
 stack_plot <- ggplot2::ggplot(verts_stack, ggplot2::aes(x = class_name, y = spp, fill = agg)) +
   # stacked bars
   ggplot2::geom_bar(ggplot2::aes(colour = agg), stat = "identity", position = "stack") +
@@ -282,7 +282,7 @@ ysi <- 670
 nud <- 1080
 txt_nud <- 500
 
-# stack plot for threat and extinction risk within used species - fig 1B
+# stack plot for threat and extinction risk within used species - fig 1b
 stack_threat_plot <- ggplot2::ggplot(verts_threat_stack, ggplot2::aes(x = class_name, y = spp, fill = agg)) +
   # stacked bars
   ggplot2::geom_bar(ggplot2::aes(colour = agg), stat = "identity", position = "stack") +
@@ -311,7 +311,7 @@ stack_threat_plot <- ggplot2::ggplot(verts_threat_stack, ggplot2::aes(x = class_
 
 ### Comparator analysis 
 
-Here we produce figure 1C
+Here we produce figure 1c
 
 ```{r}
 
@@ -377,6 +377,7 @@ fish <- 0.8
 owl <- 1.1
 dis <- -1
 
+# predator comparison - fig 1c
 dumb_log_plot <- ggplot2::ggplot(data = cmp_dumb, ggplot2::aes(x = div, y = common_name)) +
   ggplot2::geom_line(ggplot2::aes(group = pair)) +
   ggplot2::geom_point(ggplot2::aes(color = type), size = 3) +
@@ -414,18 +415,18 @@ dumb_log_plot <- ggplot2::ggplot(data = cmp_dumb, ggplot2::aes(x = div, y = comm
 
 ### Figure 1 combined
 
-Here we combine the panels, A, B, C into Figure 1
+Here we combine the panels, a, b, c into Figure 1
 
 ```{r}
 
 fig1_log <- cowplot::plot_grid(
-  cowplot::plot_grid(stack_plot, stack_threat_plot, ncol = 2, labels = "AUTO"),
+  cowplot::plot_grid(stack_plot, stack_threat_plot, ncol = 2, labels = "auto"),
   NULL,
   cowplot::plot_grid(NULL, NULL, dumb_log_plot, NULL, rel_widths = c(0.13, 0.02, 1, 0.15), nrow = 1, labels = c("", "C", "", "")),
   nrow = 3,
   rel_heights = c(1, 0.1, 2))
 
-# cowplot::save_plot("figs/fig1_use_threat.png", fig1_log, base_height = 8, base_width = 14, dpi = 600)
+cowplot::save_plot("figs/fig1_use_threat.pdf", fig1_log, base_height = 8, base_width = 14, dpi = 600)
 
 fig1_log
 
