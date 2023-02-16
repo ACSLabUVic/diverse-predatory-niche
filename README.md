@@ -23,3 +23,8 @@ See `hum_pred.Rmd` chunks 12-18
 See `hum_pred.Rmd` chunk 19
 
 These scripts have been run using R version 4.0.4 - Copyright (C) 2022 The R Foundation for Statistical Computing.
+
+***
+
+## DOI for repository
+[![DOI](https://zenodo.org/badge/575704175.svg)](https://zenodo.org/badge/latestdoi/575704175)
