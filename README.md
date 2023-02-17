@@ -4,7 +4,7 @@
 <!-- badges: end -->
 
 # Humanity’s diverse predatory niche and its ecological consequences
-# diverse-predatory-niche repository
+## diverse-predatory-niche repository
 This repository contains the required R code and data files to reproduce the analyses and plots in: 'Humanity’s diverse predatory niche and its ecological consequences' Chris T. Darimont and Rob Cooke, Mathieu L. Bourbonnais, Heather M. Bryan, Stephanie M. Carlson, James A. Estes, Mauro Galetti, Taal Levi, Jessica L. Maclean, Iain McKechnie, Paul C. Paquet, Boris Worm. Communications Biology.
 
 ***
