@@ -3,8 +3,9 @@
 [![DOI](https://zenodo.org/badge/575704175.svg)](https://zenodo.org/badge/latestdoi/575704175)
 <!-- badges: end -->
 
-# diverse-predatory-niche
-This repository contains the required R code and data files to reproduce the analyses and plots in: 'Humanity’s diverse predatory niche' Chris T. Darimont and Rob Cooke, Mathieu L. Bourbonnais, Heather M. Bryan, Stephanie M. Carlson, James A. Estes, Mauro Galetti, Taal Levi, Jessica L. Maclean, Iain McKechnie, Paul C. Paquet, Boris Worm. Communications Biology.
+# Humanity’s diverse predatory niche and its ecological consequences
+# diverse-predatory-niche repository
+This repository contains the required R code and data files to reproduce the analyses and plots in: 'Humanity’s diverse predatory niche and its ecological consequences' Chris T. Darimont and Rob Cooke, Mathieu L. Bourbonnais, Heather M. Bryan, Stephanie M. Carlson, James A. Estes, Mauro Galetti, Taal Levi, Jessica L. Maclean, Iain McKechnie, Paul C. Paquet, Boris Worm. Communications Biology.
 
 ***
 
