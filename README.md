@@ -1,5 +1,6 @@
 <!-- badges: start -->
 [![GitHub license](https://img.shields.io/github/license/Naereen/StrapDown.js.svg)](https://github.com/ACSLabUVic/diverse-predatory-niche/blob/main/LICENSE)
+[![DOI](https://zenodo.org/badge/575704175.svg)](https://zenodo.org/badge/latestdoi/575704175)
 <!-- badges: end -->
 
 # diverse-predatory-niche
@@ -24,7 +25,3 @@ See `hum_pred.Rmd` chunk 19
 
 These scripts have been run using R version 4.0.4 - Copyright (C) 2022 The R Foundation for Statistical Computing.
 
-***
-
-## DOI for repository
-[![DOI](https://zenodo.org/badge/575704175.svg)](https://zenodo.org/badge/latestdoi/575704175)
